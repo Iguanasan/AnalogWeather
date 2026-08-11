@@ -12,9 +12,20 @@ npm run dev
 Open the local URL Vite prints (usually `http://localhost:5173`).
 
 ```bash
-npm run build   # production build
-npm run preview # preview production build
+npm run build   # production build (Workers-ready assets)
+npm run preview # preview build in the Workers runtime
+npm run deploy  # build + deploy to Cloudflare Workers
 ```
+
+## Deploy (Cloudflare Workers)
+
+This app is a static SPA packaged for [Cloudflare Workers static assets](https://developers.cloudflare.com/workers/static-assets/) via the [Cloudflare Vite plugin](https://developers.cloudflare.com/workers/vite-plugin/).
+
+1. Install deps: `npm install`
+2. Log in once: `npx wrangler login`
+3. Deploy: `npm run deploy`
+
+Config lives in `wrangler.jsonc` (`not_found_handling: single-page-application` so client routes and shared URLs work).
 
 ## What it does
 
@@ -31,3 +42,4 @@ Product definition: [PRODUCT.md](./PRODUCT.md)
 - Vite + React + TypeScript  
 - Recharts  
 - Open-Meteo Archive + Geocoding APIs  
+- Cloudflare Workers (static assets + Wrangler)  
