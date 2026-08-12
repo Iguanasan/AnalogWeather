@@ -698,15 +698,18 @@ export default function App() {
         </>
       )}
 
-      <footer className="footer muted">
-        <p>
-          Daily history via{' '}
-          <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
-            Open-Meteo
-          </a>
-          . Highs, lows, and precipitation only. No accounts.
+      <section className="panel credit-panel" aria-label="Credits">
+        <img
+          className="credit-logo"
+          src="/iaidi-logo-sm.png"
+          alt="Iguanasan's AI Dojo Inc."
+          width={160}
+          height={160}
+        />
+        <p className="credit-text">
+          Developed by Iguanasan&apos;s AI Dojo Inc.
         </p>
-      </footer>
+      </section>
     </div>
   )
 }
