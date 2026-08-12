@@ -5,7 +5,12 @@ import { AnalogList } from './components/AnalogList'
 import { LoadingWeather } from './components/LoadingWeather'
 import { OverlayCharts } from './components/OverlayCharts'
 import { PlaceSearch } from './components/PlaceSearch'
-import { findAnalogEpisodes, seriesStats } from './domain/analogSearch'
+import {
+  findAnalogEpisodes,
+  findAnalogEpisodesInSlice,
+  mergeAnalogEpisodes,
+  seriesStats,
+} from './domain/analogSearch'
 import type {
   AnalogEpisode,
   AppQuery,
@@ -62,8 +67,12 @@ export default function App() {
   const abortRef = useRef<AbortController | null>(null)
   const liveModeRef = useRef(liveMode)
   const anchorDateRef = useRef(anchorDate)
+  const lengthRef = useRef(length)
+  const daysRef = useRef(days)
   liveModeRef.current = liveMode
   anchorDateRef.current = anchorDate
+  lengthRef.current = length
+  daysRef.current = days
 
   const effectiveAnchor = liveMode ? archiveEnd : anchorDate
   const units = unitsForPlace(place)
@@ -128,6 +137,8 @@ export default function App() {
   }, [hadPlaceInUrl])
 
   // Progressive history: recent years first, older decades in the background.
+  // Score only each new chunk (merge) so we never re-scan all decades on the
+  // main thread after every network response — that froze the UI.
   useEffect(() => {
     if (!place) {
       setDays(null)
@@ -154,6 +165,8 @@ export default function App() {
     ;(async () => {
       try {
         for await (const update of streamDailyHistory(place, ac.signal)) {
+          if (ac.signal.aborted) return
+
           setDays(update.days)
           setArchiveEnd(update.archiveEnd)
           setStreamStatus({
@@ -170,9 +183,37 @@ export default function App() {
             }
           }
 
+          // Resolve anchor for this paint (live → archive end)
+          const anchor = liveModeRef.current
+            ? update.archiveEnd
+            : (anchorDateRef.current ?? update.archiveEnd)
+          const L = lengthRef.current
+          const focalNow = buildFocalFromHistory(update.days, anchor, L)
+
+          if (focalNow && update.newDays.length > 0) {
+            const found = findAnalogEpisodesInSlice(
+              update.newDays,
+              focalNow.series,
+              {
+                length: L,
+                focalStart: focalNow.start,
+                focalEnd: focalNow.end,
+                topN: TOP_N,
+              },
+            )
+            if (found.length) {
+              setAnalogs((prev) => mergeAnalogEpisodes(prev, found, TOP_N))
+            }
+          }
+
           if (update.done) {
             setStreamStatus(null)
           }
+
+          // Let the browser paint between chunks
+          await new Promise<void>((r) => {
+            window.setTimeout(r, 0)
+          })
         }
       } catch (e) {
         if ((e as Error).name === 'AbortError') return
@@ -190,21 +231,33 @@ export default function App() {
     return buildFocalFromHistory(days, effectiveAnchor, length)
   }, [days, effectiveAnchor, length])
 
-  // Re-score whenever days grow or the focal window changes — fast on partial data.
+  // Full re-scan only when the user changes window or anchor — not when
+  // progressive chunks arrive (those merge in the stream loop above).
   useEffect(() => {
-    if (!days || !focal) {
+    const d = daysRef.current
+    if (!d || !effectiveAnchor) {
+      // Place/stream owns clearing while loading; don't wipe mid-stream merges
+      // when anchor is briefly unset.
+      if (!d) {
+        setAnalogs([])
+        setSelected(null)
+      }
+      return
+    }
+    const f = buildFocalFromHistory(d, effectiveAnchor, length)
+    if (!f) {
       setAnalogs([])
       setSelected(null)
       return
     }
-    const results = findAnalogEpisodes(days, focal.series, {
+    const results = findAnalogEpisodes(d, f.series, {
       length,
-      focalStart: focal.start,
-      focalEnd: focal.end,
+      focalStart: f.start,
+      focalEnd: f.end,
       topN: TOP_N,
     })
     setAnalogs(results)
-  }, [days, focal, length])
+  }, [length, effectiveAnchor])
 
   const sortedAnalogs = useMemo(() => {
     if (analogSort === 'date') return analogs

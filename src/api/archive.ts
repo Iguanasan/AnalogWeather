@@ -107,12 +107,12 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       reject(new DOMException('Aborted', 'AbortError'))
       return
     }
-    const t = window.setTimeout(() => {
+    const t = globalThis.setTimeout(() => {
       signal?.removeEventListener('abort', onAbort)
       resolve()
     }, ms)
     const onAbort = () => {
-      window.clearTimeout(t)
+      globalThis.clearTimeout(t)
       reject(new DOMException('Aborted', 'AbortError'))
     }
     signal?.addEventListener('abort', onAbort, { once: true })
