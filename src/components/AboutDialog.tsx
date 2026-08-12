@@ -61,12 +61,9 @@ export function AboutDialog({ open, onClose }: Props) {
           <p className="about-app-name">When did it feel like?</p>
           <p className="muted about-version">Version 1.0</p>
 
-          <p>
-            A free web app that finds past weather spells — days, weeks, or
-            months — whose highs, lows, and rain felt like conditions at a place
-            you care about.
-          </p>
-
+          <p>A free web app that answers the question:<br />
+          When did the weather last feel like it feels like it does right now?"</p>
+          <hr width="25%"></hr>
           <h3 className="about-section-title">Developer</h3>
           <div className="about-developer">
             <img
@@ -92,6 +89,7 @@ export function AboutDialog({ open, onClose }: Props) {
               </p>
             </div>
           </div>
+          <hr width="25%"></hr>
 
           <h3 className="about-section-title">Weather data</h3>
           <p>
@@ -111,28 +109,9 @@ export function AboutDialog({ open, onClose }: Props) {
             >
               Creative Commons Attribution 4.0
             </a>{' '}
-            licence. This app uses their free open-access archive for
-            non-commercial use and asks for data as sparingly as possible (one
-            request per place, then cached). Open-Meteo&apos;s fair-use limits
-            and terms:{' '}
-            <a
-              href="https://open-meteo.com/en/terms"
-              target="_blank"
-              rel="noreferrer"
-            >
-              open-meteo.com/en/terms
-            </a>
-            .
+            licence.
           </p>
-
-          <h3 className="about-section-title">Privacy</h3>
-          <p>
-            No accounts and no ads. Place search and weather requests go
-            directly to open weather services. If you allow location, your
-            browser may share coordinates only to look up a place name and load
-            local history. Nothing is stored on our servers as a user profile.
-          </p>
-
+          <hr width="25%"></hr>
           <h3 className="about-section-title">Disclaimer</h3>
           <p className="muted about-disclaimer">
             Weather data is provided as-is without warranty. Analog matches are
