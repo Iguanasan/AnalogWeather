@@ -8,6 +8,30 @@ export function addDaysIso(iso: string, delta: number): string {
   return dt.toISOString().slice(0, 10)
 }
 
+/** Compare ISO dates YYYY-MM-DD (lexicographic works for this format). */
+export function compareIsoDates(a: string, b: string): number {
+  if (a < b) return -1
+  if (a > b) return 1
+  return 0
+}
+
+/**
+ * Earliest anchor that still has a full L-day trailing window after
+ * ARCHIVE_START (1940-01-01).
+ */
+export function minAnchorForLength(length: WindowLength): string {
+  return addDaysIso('1940-01-01', length - 1)
+}
+
+/** Step the period ending date by ± one full window length. */
+export function stepPeriodAnchor(
+  anchor: string,
+  length: WindowLength,
+  direction: -1 | 1,
+): string {
+  return addDaysIso(anchor, direction * length)
+}
+
 /** Inclusive end = anchor; start = anchor - (L - 1). */
 export function focalRange(
   anchorDate: string,

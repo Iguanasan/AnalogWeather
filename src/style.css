@@ -172,6 +172,25 @@ input[type='date'] {
   font-size: 1rem;
 }
 
+.period-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.period-nav input[type='date'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.period-nav .period-step {
+  width: 2.5rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  flex-shrink: 0;
+}
+
 .place-search input[type='search']:focus,
 input[type='date']:focus {
   outline: 2px solid var(--accent);

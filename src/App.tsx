@@ -18,8 +18,11 @@ import type {
 import { formatPrecip, formatTemp, unitsForPlace } from './domain/units'
 import {
   buildFocalFromHistory,
+  compareIsoDates,
   formatEpisodeRange,
   formatNiceDate,
+  minAnchorForLength,
+  stepPeriodAnchor,
   windowLabel,
 } from './lib/dates'
 import { readQueryFromUrl, shareableUrl, writeQueryToUrl } from './lib/urlState'
@@ -160,6 +163,23 @@ export default function App() {
     setPlace(p)
   }, [])
 
+  const minAnchor = minAnchorForLength(length)
+  const canStepPrev =
+    Boolean(place && effectiveAnchor) &&
+    compareIsoDates(stepPeriodAnchor(effectiveAnchor!, length, -1), minAnchor) >= 0
+  const canStepNext =
+    Boolean(place && effectiveAnchor && archiveEnd) &&
+    compareIsoDates(effectiveAnchor!, archiveEnd!) < 0
+
+  function stepPeriod(direction: -1 | 1) {
+    if (!effectiveAnchor) return
+    let next = stepPeriodAnchor(effectiveAnchor, length, direction)
+    if (compareIsoDates(next, minAnchor) < 0) next = minAnchor
+    if (archiveEnd && compareIsoDates(next, archiveEnd) > 0) next = archiveEnd
+    setLiveMode(false)
+    setAnchorDate(next)
+  }
+
   const focalStats = focal ? seriesStats(focal.series) : null
 
   async function copyShareLink() {
@@ -278,18 +298,72 @@ export default function App() {
             <label className="field-label" htmlFor="anchor-date">
               {length === 1 ? 'Selected Day' : 'Period Ending'}
             </label>
-            <input
-              id="anchor-date"
-              type="date"
-              value={effectiveAnchor ?? ''}
-              max={archiveEnd ?? undefined}
-              min="1940-01-01"
-              disabled={liveMode || !place}
-              onChange={(e) => {
-                setLiveMode(false)
-                setAnchorDate(e.target.value || null)
-              }}
-            />
+            <div className="period-nav">
+              <button
+                type="button"
+                className="icon-btn period-step"
+                disabled={!canStepPrev}
+                onClick={() => stepPeriod(-1)}
+                aria-label={
+                  length === 1 ? 'Previous day' : 'Previous period'
+                }
+                title={length === 1 ? 'Previous day' : 'Previous period'}
+              >
+                <svg
+                  className="icon"
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  aria-hidden="true"
+                >
+                  <path
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 6l-6 6 6 6"
+                  />
+                </svg>
+              </button>
+              <input
+                id="anchor-date"
+                type="date"
+                value={effectiveAnchor ?? ''}
+                max={archiveEnd ?? undefined}
+                min={minAnchor}
+                disabled={!place}
+                onChange={(e) => {
+                  setLiveMode(false)
+                  setAnchorDate(e.target.value || null)
+                }}
+              />
+              <button
+                type="button"
+                className="icon-btn period-step"
+                disabled={!canStepNext}
+                onClick={() => stepPeriod(1)}
+                aria-label={length === 1 ? 'Next day' : 'Next period'}
+                title={length === 1 ? 'Next day' : 'Next period'}
+              >
+                <svg
+                  className="icon"
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  aria-hidden="true"
+                >
+                  <path
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 6l6 6-6 6"
+                  />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </section>
