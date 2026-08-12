@@ -21,7 +21,7 @@ const COPY: Record<LoadStage, { title: string; line: string }> = {
     line: 'Asking the clouds where you are',
   },
   history: {
-    title: 'Filling the lake…',
+    title: 'Collecting historical weather information…',
     line: 'Pouring past weather in the background',
   },
   searching: {
