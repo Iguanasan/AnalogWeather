@@ -1,6 +1,8 @@
 import {
   findAnalogEpisodes,
+  findAnalogEpisodesInSlice,
   matchStrengthFromDistance,
+  mergeAnalogEpisodes,
   seriesDeltas,
 } from './analogSearch'
 import type { DailyObservation } from './types'
@@ -86,6 +88,33 @@ const strict = findAnalogEpisodes(historyWithFocal, focal, {
 })
 console.assert(strict.length <= results.length, 'stricter cutoff returns fewer or equal')
 
+// Progressive merge: score a recent slice, then an older slice, combine
+const recentSlice = findAnalogEpisodesInSlice(
+  [...yearDays(2018, 20.5, 5.5), ...yearDays(2020, 20, 5)],
+  focal,
+  {
+    length: 7,
+    focalStart: '2020-07-01',
+    focalEnd: '2020-07-07',
+    topN: 10,
+  },
+)
+const olderSlice = findAnalogEpisodesInSlice(yearDays(2015, 20, 5), focal, {
+  length: 7,
+  focalStart: '2020-07-01',
+  focalEnd: '2020-07-07',
+  topN: 10,
+})
+const merged = mergeAnalogEpisodes(recentSlice, olderSlice, 10)
+console.assert(
+  merged.some((r) => r.year === 2018) && merged.some((r) => r.year === 2015),
+  'merge should keep winners from both progressive slices',
+)
+console.assert(
+  merged[0]!.year === 2018,
+  'merged list should still prefer more recent end dates first',
+)
+
 console.log('analogSearch tests passed', {
   top: results.slice(0, 5).map((r) => ({
     year: r.year,
@@ -93,4 +122,5 @@ console.log('analogSearch tests passed', {
     m: r.matchStrength,
   })),
   delta2018: deltas,
+  mergedYears: merged.map((r) => r.year),
 })

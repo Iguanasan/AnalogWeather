@@ -107,6 +107,110 @@ function datesOverlap(
   return aStart <= bEnd && bStart <= aEnd
 }
 
+/** Best L-day window within one year's daily rows (already chronological). */
+export function findBestAnalogInYear(
+  year: number,
+  days: DailyObservation[],
+  focal: WeatherSeries,
+  options: Pick<
+    AnalogSearchOptions,
+    'length' | 'focalStart' | 'focalEnd' | 'minMatchStrength'
+  >,
+): AnalogEpisode | null {
+  const {
+    length,
+    focalStart,
+    focalEnd,
+    minMatchStrength = MIN_MATCH_STRENGTH,
+  } = options
+  if (focal.tMax.length !== length || days.length < length) return null
+
+  let best: AnalogEpisode | null = null
+
+  for (let i = 0; i <= days.length - length; i++) {
+    const series = extractSeries(days, i, length)
+    if (!series) continue
+
+    const startDate = series.dates[0]!
+    const endDate = series.dates[length - 1]!
+
+    if (datesOverlap(startDate, endDate, focalStart, focalEnd)) continue
+
+    const tempHighRmse = rmse(focal.tMax, series.tMax)
+    const tempLowRmse = rmse(focal.tMin, series.tMin)
+    const precipRmse = rmse(focal.precip, series.precip)
+    const distance = blendedDistance(tempHighRmse, tempLowRmse, precipRmse)
+
+    if (!best || distance < best.distance) {
+      best = {
+        year,
+        startDate,
+        endDate,
+        series,
+        distance,
+        matchStrength: matchStrengthFromDistance(distance),
+        tempHighRmse,
+        tempLowRmse,
+        precipRmse,
+      }
+    }
+  }
+
+  if (best && best.matchStrength >= minMatchStrength) return best
+  return null
+}
+
+/**
+ * Score only the years present in `history` (used for progressive chunks).
+ * Does not re-score years outside this slice.
+ */
+export function findAnalogEpisodesInSlice(
+  history: DailyObservation[],
+  focal: WeatherSeries,
+  options: AnalogSearchOptions,
+): AnalogEpisode[] {
+  const { length } = options
+  if (focal.tMax.length !== length || history.length < length) return []
+
+  const byYear = new Map<number, DailyObservation[]>()
+  for (const day of history) {
+    const y = yearOf(day.date)
+    let list = byYear.get(y)
+    if (!list) {
+      list = []
+      byYear.set(y, list)
+    }
+    list.push(day)
+  }
+
+  const found: AnalogEpisode[] = []
+  for (const [year, days] of byYear) {
+    days.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+    const best = findBestAnalogInYear(year, days, focal, options)
+    if (best) found.push(best)
+  }
+  return found
+}
+
+/** Merge per-year winners; keep closer episode when the same year appears twice. */
+export function mergeAnalogEpisodes(
+  existing: AnalogEpisode[],
+  incoming: AnalogEpisode[],
+  topN = 24,
+): AnalogEpisode[] {
+  const byYear = new Map<number, AnalogEpisode>()
+  for (const ep of existing) byYear.set(ep.year, ep)
+  for (const ep of incoming) {
+    const prev = byYear.get(ep.year)
+    if (!prev || ep.distance < prev.distance) byYear.set(ep.year, ep)
+  }
+  const merged = [...byYear.values()]
+  merged.sort((a, b) =>
+    a.endDate < b.endDate ? 1 : a.endDate > b.endDate ? -1 : 0,
+  )
+  return merged.slice(0, topN)
+}
+
 /**
  * Full-year sliding-window search: for each calendar year, score every
  * L-length window on daily high + low + precip vs the focal series; keep
@@ -121,74 +225,9 @@ export function findAnalogEpisodes(
   focal: WeatherSeries,
   options: AnalogSearchOptions,
 ): AnalogEpisode[] {
-  const {
-    length,
-    focalStart,
-    focalEnd,
-    topN = 24,
-    minMatchStrength = MIN_MATCH_STRENGTH,
-  } = options
-  if (focal.tMax.length !== length || history.length < length) return []
-
-  const byYear = new Map<number, DailyObservation[]>()
-  for (const day of history) {
-    const y = yearOf(day.date)
-    let list = byYear.get(y)
-    if (!list) {
-      list = []
-      byYear.set(y, list)
-    }
-    list.push(day)
-  }
-
-  const bestByYear: AnalogEpisode[] = []
-
-  for (const [year, days] of byYear) {
-    // Ensure chronological order
-    days.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-
-    let best: AnalogEpisode | null = null
-
-    for (let i = 0; i <= days.length - length; i++) {
-      const series = extractSeries(days, i, length)
-      if (!series) continue
-
-      const startDate = series.dates[0]!
-      const endDate = series.dates[length - 1]!
-
-      // Exclude windows that overlap the focal episode (self-match).
-      if (datesOverlap(startDate, endDate, focalStart, focalEnd)) continue
-
-      const tempHighRmse = rmse(focal.tMax, series.tMax)
-      const tempLowRmse = rmse(focal.tMin, series.tMin)
-      const precipRmse = rmse(focal.precip, series.precip)
-      const distance = blendedDistance(tempHighRmse, tempLowRmse, precipRmse)
-
-      if (!best || distance < best.distance) {
-        best = {
-          year,
-          startDate,
-          endDate,
-          series,
-          distance,
-          matchStrength: matchStrengthFromDistance(distance),
-          tempHighRmse,
-          tempLowRmse,
-          precipRmse,
-        }
-      }
-    }
-
-    if (best && best.matchStrength >= minMatchStrength) {
-      bestByYear.push(best)
-    }
-  }
-
-  // Most recent first — “when did it last feel like this?”
-  bestByYear.sort((a, b) =>
-    a.endDate < b.endDate ? 1 : a.endDate > b.endDate ? -1 : 0,
-  )
-  return bestByYear.slice(0, topN)
+  const { topN = 24 } = options
+  const found = findAnalogEpisodesInSlice(history, focal, options)
+  return mergeAnalogEpisodes([], found, topN)
 }
 
 export function seriesStats(series: WeatherSeries): {

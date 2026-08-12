@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { fetchDailyHistory } from './api/archive'
+import { streamDailyHistory } from './api/archive'
 import { detectCurrentPlace, formatPlaceLabel } from './api/geocode'
 import { AnalogList } from './components/AnalogList'
-import { LoadingWeather, type LoadStage } from './components/LoadingWeather'
+import { LoadingWeather } from './components/LoadingWeather'
 import { OverlayCharts } from './components/OverlayCharts'
 import { PlaceSearch } from './components/PlaceSearch'
-import {
-  findAnalogEpisodes,
-  seriesStats,
-} from './domain/analogSearch'
+import { findAnalogEpisodes, seriesStats } from './domain/analogSearch'
 import type {
   AnalogEpisode,
   AppQuery,
@@ -29,8 +26,15 @@ import {
 import { readQueryFromUrl, shareableUrl, writeQueryToUrl } from './lib/urlState'
 
 const LENGTHS: WindowLength[] = [1, 7, 30]
+const TOP_N = 24
 
 type AnalogSort = 'date' | 'match'
+
+type StreamStatus = {
+  progress: number
+  label: string
+  done: boolean
+}
 
 export default function App() {
   const initial = useMemo(() => readQueryFromUrl(), [])
@@ -42,7 +46,10 @@ export default function App() {
 
   const [days, setDays] = useState<DailyObservation[] | null>(null)
   const [archiveEnd, setArchiveEnd] = useState<string | null>(null)
-  const [loadingHistory, setLoadingHistory] = useState(false)
+  /** True until the first history chunk arrives (or fails). */
+  const [awaitingFirstChunk, setAwaitingFirstChunk] = useState(false)
+  /** Background archive stream after first paint. */
+  const [streamStatus, setStreamStatus] = useState<StreamStatus | null>(null)
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [locating, setLocating] = useState(!hadPlaceInUrl)
   const [locationHint, setLocationHint] = useState<string | null>(null)
@@ -50,12 +57,13 @@ export default function App() {
   const [analogs, setAnalogs] = useState<AnalogEpisode[]>([])
   const [analogSort, setAnalogSort] = useState<AnalogSort>('date')
   const [selected, setSelected] = useState<AnalogEpisode | null>(null)
-  const [computing, setComputing] = useState(false)
-  /** Delay search overlay so quick period tweaks don't flash the modal. */
-  const [showSearchOverlay, setShowSearchOverlay] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
+  const liveModeRef = useRef(liveMode)
+  const anchorDateRef = useRef(anchorDate)
+  liveModeRef.current = liveMode
+  anchorDateRef.current = anchorDate
 
   const effectiveAnchor = liveMode ? archiveEnd : anchorDate
   const units = unitsForPlace(place)
@@ -94,8 +102,6 @@ export default function App() {
   }, [])
 
   // Default to the user's current location when the URL has no place.
-  // Do not abort on unmount: React Strict Mode remounts once in dev and
-  // aborting mid-permission/fix is a common cause of false timeouts.
   useEffect(() => {
     if (hadPlaceInUrl) return
     let active = true
@@ -121,86 +127,84 @@ export default function App() {
     }
   }, [hadPlaceInUrl])
 
-  // Load history when place changes
+  // Progressive history: recent years first, older decades in the background.
   useEffect(() => {
     if (!place) {
       setDays(null)
       setArchiveEnd(null)
       setAnalogs([])
       setSelected(null)
+      setStreamStatus(null)
+      setAwaitingFirstChunk(false)
       return
     }
 
     abortRef.current?.abort()
     const ac = new AbortController()
     abortRef.current = ac
-    setLoadingHistory(true)
+    setAwaitingFirstChunk(true)
     setHistoryError(null)
     setDays(null)
     setAnalogs([])
     setSelected(null)
+    setStreamStatus({ progress: 0, label: 'recent years', done: false })
 
-    fetchDailyHistory(place, ac.signal)
-      .then(({ days: d, endDate }) => {
-        setDays(d)
-        setArchiveEnd(endDate)
-        if (liveMode || !anchorDate) {
-          setAnchorDate(endDate)
+    let first = true
+
+    ;(async () => {
+      try {
+        for await (const update of streamDailyHistory(place, ac.signal)) {
+          setDays(update.days)
+          setArchiveEnd(update.archiveEnd)
+          setStreamStatus({
+            progress: update.progress,
+            label: update.label,
+            done: update.done,
+          })
+
+          if (first) {
+            first = false
+            setAwaitingFirstChunk(false)
+            if (liveModeRef.current || !anchorDateRef.current) {
+              setAnchorDate(update.archiveEnd)
+            }
+          }
+
+          if (update.done) {
+            setStreamStatus(null)
+          }
         }
-      })
-      .catch((e) => {
+      } catch (e) {
         if ((e as Error).name === 'AbortError') return
         setHistoryError((e as Error).message || 'Failed to load history')
-      })
-      .finally(() => setLoadingHistory(false))
+        setAwaitingFirstChunk(false)
+        setStreamStatus(null)
+      }
+    })()
 
     return () => ac.abort()
-  }, [place]) // eslint-disable-line react-hooks/exhaustive-deps -- reload only on place change
+  }, [place])
 
   const focal = useMemo(() => {
     if (!days || !effectiveAnchor) return null
     return buildFocalFromHistory(days, effectiveAnchor, length)
   }, [days, effectiveAnchor, length])
 
-  // Run analog search when focal/history ready
+  // Re-score whenever days grow or the focal window changes — fast on partial data.
   useEffect(() => {
     if (!days || !focal) {
       setAnalogs([])
       setSelected(null)
-      setComputing(false)
       return
     }
-    setComputing(true)
-    let cancelled = false
-    // Yield so the loading scene can paint before the CPU work
-    const handle = window.setTimeout(() => {
-      try {
-        const results = findAnalogEpisodes(days, focal.series, {
-          length,
-          focalStart: focal.start,
-          focalEnd: focal.end,
-          topN: 24,
-        })
-        if (!cancelled) setAnalogs(results)
-      } finally {
-        if (!cancelled) setComputing(false)
-      }
-    }, 0)
-    return () => {
-      cancelled = true
-      window.clearTimeout(handle)
-    }
+    const results = findAnalogEpisodes(days, focal.series, {
+      length,
+      focalStart: focal.start,
+      focalEnd: focal.end,
+      topN: TOP_N,
+    })
+    setAnalogs(results)
   }, [days, focal, length])
-
-  // Only show the full-screen search scene if matching takes a noticeable moment
-  useEffect(() => {
-    if (!computing || loadingHistory || locating) {
-      setShowSearchOverlay(false)
-      return
-    }
-    const t = window.setTimeout(() => setShowSearchOverlay(true), 220)
-    return () => window.clearTimeout(t)
-  }, [computing, loadingHistory, locating])
 
   const sortedAnalogs = useMemo(() => {
     if (analogSort === 'date') return analogs
@@ -208,13 +212,10 @@ export default function App() {
       if (b.matchStrength !== a.matchStrength) {
         return b.matchStrength - a.matchStrength
       }
-      // Stronger first, then more recent on ties
       return a.endDate < b.endDate ? 1 : a.endDate > b.endDate ? -1 : 0
     })
   }, [analogs, analogSort])
 
-  // Keep selection on a listed episode; pick the top of the current sort when
-  // results change or the selection is no longer in the list.
   useEffect(() => {
     if (sortedAnalogs.length === 0) {
       setSelected(null)
@@ -255,14 +256,7 @@ export default function App() {
   }
 
   const focalStats = focal ? seriesStats(focal.series) : null
-
-  const loadStage: LoadStage | null = locating
-    ? 'locating'
-    : loadingHistory
-      ? 'history'
-      : showSearchOverlay
-        ? 'searching'
-        : null
+  const streaming = Boolean(streamStatus && !streamStatus.done)
 
   async function copyShareLink() {
     const url = shareableUrl(query)
@@ -277,12 +271,6 @@ export default function App() {
 
   return (
     <div className="app">
-      {loadStage && (
-        <LoadingWeather
-          stage={loadStage}
-          placeLabel={place ? formatPlaceLabel(place) : null}
-        />
-      )}
       <header className="hero">
         <div className="brand">
           <h1>Analog Weather</h1>
@@ -467,7 +455,7 @@ export default function App() {
       {!place && (
         <section className="panel empty-state">
           {locating ? (
-            <p>Detecting your location…</p>
+            <LoadingWeather stage="locating" variant="banner" />
           ) : (
             <p>
               Search for a place to see which past spells look most like recent
@@ -485,6 +473,20 @@ export default function App() {
 
       {place && (
         <>
+          {(awaitingFirstChunk || streaming) && (
+            <LoadingWeather
+              stage="history"
+              variant="banner"
+              progress={streamStatus?.progress ?? 0.08}
+              detail={
+                awaitingFirstChunk
+                  ? 'Fetching recent years first…'
+                  : `Scanning ${streamStatus?.label ?? 'history'} — results update as we go`
+              }
+              placeLabel={formatPlaceLabel(place)}
+            />
+          )}
+
           <section className="panel status-bar">
             <div>
               <strong>{formatPlaceLabel(place)}</strong>
@@ -494,11 +496,17 @@ export default function App() {
                   · archive through {formatNiceDate(archiveEnd)}
                 </span>
               )}
+              {streaming && (
+                <span className="muted">
+                  {' '}
+                  · still filling older years…
+                </span>
+              )}
             </div>
             {historyError && <p className="error-text">{historyError}</p>}
           </section>
 
-          {focal && focalStats && !loadingHistory && (
+          {focal && focalStats && (
             <section className="panel focal-panel">
               <div className="focal-header">
                 <h2>{windowLabel(length)}</h2>
@@ -537,7 +545,7 @@ export default function App() {
             </section>
           )}
 
-          {focal && !loadingHistory && (
+          {focal && (
             <section className="results-layout">
               <div className="panel">
                 <div className="panel-heading">
@@ -576,18 +584,17 @@ export default function App() {
                     : 'Strongest match first'}{' '}
                   · one spell per year · only if close enough (score ≥ 50). +/−
                   is warmer/cooler or wetter/drier than this spell.
+                  {streaming
+                    ? ' Older years keep arriving in the background.'
+                    : ''}
                 </p>
-                {computing ? (
-                  <p className="muted">Searching the record…</p>
-                ) : (
-                  <AnalogList
-                    analogs={sortedAnalogs}
-                    focal={focal.series}
-                    selectedYear={selected?.year ?? null}
-                    onSelect={setSelected}
-                    units={units}
-                  />
-                )}
+                <AnalogList
+                  analogs={sortedAnalogs}
+                  focal={focal.series}
+                  selectedYear={selected?.year ?? null}
+                  onSelect={setSelected}
+                  units={units}
+                />
               </div>
               <div className="panel">
                 <h2 className="section-title">
@@ -610,11 +617,16 @@ export default function App() {
             </section>
           )}
 
-          {place && !loadingHistory && !focal && !historyError && (
+          {place &&
+            !awaitingFirstChunk &&
+            !focal &&
+            !historyError &&
+            days && (
             <section className="panel">
               <p className="error-text">
-                Not enough complete daily data for this window ending on the selected date.
-                Try a later anchor or a shorter window.
+                {streaming
+                  ? 'Still loading older years for this date…'
+                  : 'Not enough complete daily data for this window ending on the selected date. Try a later anchor or a shorter window.'}
               </p>
             </section>
           )}
