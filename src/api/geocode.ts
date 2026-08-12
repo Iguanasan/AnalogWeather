@@ -77,7 +77,11 @@ export async function reverseGeocode(
     data.city?.trim() ||
     data.locality?.trim() ||
     'Your location'
-  const country = data.countryName?.trim() || 'Unknown'
+  // BigDataCloud sometimes returns "United States of America (the)"
+  const country = (data.countryName?.trim() || 'Unknown').replace(
+    /\s*\(the\)$/i,
+    '',
+  )
   const countryCode = (data.countryCode?.trim() || 'XX').toUpperCase()
   const admin1 = data.principalSubdivision?.trim() || undefined
 
