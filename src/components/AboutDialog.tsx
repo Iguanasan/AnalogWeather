@@ -61,9 +61,12 @@ export function AboutDialog({ open, onClose }: Props) {
           <p className="about-app-name">When did it feel like?</p>
           <p className="muted about-version">Version 1.0</p>
 
-          <p>A free web app that answers the question:<br />
-          When did the weather last feel like it feels like it does right now?"</p>
-          <hr width="25%"></hr>
+          <p>
+            A free web app that answers the question:
+            <br />
+            When did the weather last feel like it feels like it does right now?
+          </p>
+          <hr className="about-rule" />
           <h3 className="about-section-title">Developer</h3>
           <div className="about-developer">
             <img
@@ -89,7 +92,7 @@ export function AboutDialog({ open, onClose }: Props) {
               </p>
             </div>
           </div>
-          <hr width="25%"></hr>
+          <hr className="about-rule" />
 
           <h3 className="about-section-title">Weather data</h3>
           <p>
@@ -111,7 +114,7 @@ export function AboutDialog({ open, onClose }: Props) {
             </a>{' '}
             licence.
           </p>
-          <hr width="25%"></hr>
+          <hr className="about-rule" />
           <h3 className="about-section-title">Disclaimer</h3>
           <p className="muted about-disclaimer">
             Weather data is provided as-is without warranty. Analog matches are

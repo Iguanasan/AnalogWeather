@@ -709,6 +709,19 @@ input[type='date']:focus {
   margin: 0;
 }
 
+/* Section dividers — default <hr> is nearly invisible on dark panels */
+.about-body hr.about-rule,
+.about-body .about-rule {
+  display: block;
+  width: 25%;
+  max-width: 6rem;
+  height: 0;
+  margin: 0.85rem auto;
+  border: 0;
+  border-top: 1px solid var(--border);
+  opacity: 1;
+}
+
 .about-app-name {
   font-weight: 600;
   font-size: 1.05rem;
