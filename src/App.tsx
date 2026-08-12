@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchDailyHistory } from './api/archive'
 import { detectCurrentPlace, formatPlaceLabel } from './api/geocode'
 import { AnalogList } from './components/AnalogList'
+import { LoadingWeather, type LoadStage } from './components/LoadingWeather'
 import { OverlayCharts } from './components/OverlayCharts'
 import { PlaceSearch } from './components/PlaceSearch'
 import {
@@ -50,6 +51,8 @@ export default function App() {
   const [analogSort, setAnalogSort] = useState<AnalogSort>('date')
   const [selected, setSelected] = useState<AnalogEpisode | null>(null)
   const [computing, setComputing] = useState(false)
+  /** Delay search overlay so quick period tweaks don't flash the modal. */
+  const [showSearchOverlay, setShowSearchOverlay] = useState(false)
   const [copied, setCopied] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
@@ -164,10 +167,12 @@ export default function App() {
     if (!days || !focal) {
       setAnalogs([])
       setSelected(null)
+      setComputing(false)
       return
     }
     setComputing(true)
-    // Yield so UI can paint loading state
+    let cancelled = false
+    // Yield so the loading scene can paint before the CPU work
     const handle = window.setTimeout(() => {
       try {
         const results = findAnalogEpisodes(days, focal.series, {
@@ -176,14 +181,26 @@ export default function App() {
           focalEnd: focal.end,
           topN: 24,
         })
-        setAnalogs(results)
-        // Selection follows sortedAnalogs (date or match order)
+        if (!cancelled) setAnalogs(results)
       } finally {
-        setComputing(false)
+        if (!cancelled) setComputing(false)
       }
-    }, 10)
-    return () => window.clearTimeout(handle)
+    }, 0)
+    return () => {
+      cancelled = true
+      window.clearTimeout(handle)
+    }
   }, [days, focal, length])
+
+  // Only show the full-screen search scene if matching takes a noticeable moment
+  useEffect(() => {
+    if (!computing || loadingHistory || locating) {
+      setShowSearchOverlay(false)
+      return
+    }
+    const t = window.setTimeout(() => setShowSearchOverlay(true), 220)
+    return () => window.clearTimeout(t)
+  }, [computing, loadingHistory, locating])
 
   const sortedAnalogs = useMemo(() => {
     if (analogSort === 'date') return analogs
@@ -239,6 +256,14 @@ export default function App() {
 
   const focalStats = focal ? seriesStats(focal.series) : null
 
+  const loadStage: LoadStage | null = locating
+    ? 'locating'
+    : loadingHistory
+      ? 'history'
+      : showSearchOverlay
+        ? 'searching'
+        : null
+
   async function copyShareLink() {
     const url = shareableUrl(query)
     try {
@@ -252,6 +277,12 @@ export default function App() {
 
   return (
     <div className="app">
+      {loadStage && (
+        <LoadingWeather
+          stage={loadStage}
+          placeLabel={place ? formatPlaceLabel(place) : null}
+        />
+      )}
       <header className="hero">
         <div className="brand">
           <h1>Analog Weather</h1>
@@ -464,11 +495,6 @@ export default function App() {
                 </span>
               )}
             </div>
-            {(loadingHistory || computing) && (
-              <span className="muted">
-                {loadingHistory ? 'Loading history…' : 'Finding closest spells…'}
-              </span>
-            )}
             {historyError && <p className="error-text">{historyError}</p>}
           </section>
 
