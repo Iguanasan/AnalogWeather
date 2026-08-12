@@ -80,18 +80,14 @@ export function extractSeries(
   const precip: number[] = []
 
   for (const d of slice) {
-    if (
-      d.tMax == null ||
-      d.tMin == null ||
-      d.tMean == null ||
-      d.precip == null
-    ) {
+    if (d.tMax == null || d.tMin == null || d.precip == null) {
       return null
     }
     dates.push(d.date)
     tMax.push(d.tMax)
     tMin.push(d.tMin)
-    tMean.push(d.tMean)
+    // Mean is display-only fallback; high/low drive matching.
+    tMean.push(d.tMean ?? (d.tMax + d.tMin) / 2)
     precip.push(d.precip)
   }
 

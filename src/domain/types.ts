@@ -15,8 +15,11 @@ export type Place = {
 export type DailyObservation = {
   /** ISO date YYYY-MM-DD in the place's local calendar. */
   date: string
-  /** Mean temperature °C (archive native). */
-  tMean: number | null
+  /**
+   * 24h mean °C when available. Optional — matching uses high/low only;
+   * archive fetch may omit mean to reduce payload.
+   */
+  tMean?: number | null
   tMax: number | null
   tMin: number | null
   /** Precipitation total mm. */
