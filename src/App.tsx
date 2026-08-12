@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchDailyHistory } from './api/archive'
-import { formatPlaceLabel } from './api/geocode'
+import { detectCurrentPlace, formatPlaceLabel } from './api/geocode'
 import { AnalogList } from './components/AnalogList'
 import { OverlayCharts } from './components/OverlayCharts'
 import { PlaceSearch } from './components/PlaceSearch'
@@ -28,6 +28,7 @@ const LENGTHS: WindowLength[] = [1, 7, 30]
 
 export default function App() {
   const initial = useMemo(() => readQueryFromUrl(), [])
+  const hadPlaceInUrl = Boolean(initial.placeHint)
   const [place, setPlace] = useState<Place | null>(initial.placeHint ?? null)
   const [length, setLength] = useState<WindowLength>(initial.length ?? 7)
   const [anchorDate, setAnchorDate] = useState<string | null>(initial.anchorDate ?? null)
@@ -37,6 +38,8 @@ export default function App() {
   const [archiveEnd, setArchiveEnd] = useState<string | null>(null)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
+  const [locating, setLocating] = useState(!hadPlaceInUrl)
+  const [locationHint, setLocationHint] = useState<string | null>(null)
 
   const [analogs, setAnalogs] = useState<AnalogEpisode[]>([])
   const [selected, setSelected] = useState<AnalogEpisode | null>(null)
@@ -60,6 +63,30 @@ export default function App() {
   useEffect(() => {
     writeQueryToUrl(query, true)
   }, [query])
+
+  // Default to the user's current location when the URL has no place
+  useEffect(() => {
+    if (hadPlaceInUrl) return
+
+    const ac = new AbortController()
+    setLocating(true)
+    setLocationHint(null)
+
+    detectCurrentPlace({ signal: ac.signal })
+      .then((p) => {
+        setPlace((current) => current ?? p)
+      })
+      .catch((e) => {
+        if ((e as Error).name === 'AbortError') return
+        setLocationHint(
+          (e as Error).message ||
+            'Could not detect location — search for a place instead.',
+        )
+      })
+      .finally(() => setLocating(false))
+
+    return () => ac.abort()
+  }, [hadPlaceInUrl])
 
   // Load history when place changes
   useEffect(() => {
@@ -273,7 +300,20 @@ export default function App() {
 
       {!place && (
         <section className="panel empty-state">
-          <p>Search for a place to see which past spells look most like recent weather there.</p>
+          {locating ? (
+            <p>Detecting your location…</p>
+          ) : (
+            <p>
+              Search for a place to see which past spells look most like recent
+              weather there.
+              {locationHint ? (
+                <>
+                  {' '}
+                  <span className="error-text">{locationHint}</span>
+                </>
+              ) : null}
+            </p>
+          )}
         </section>
       )}
 
