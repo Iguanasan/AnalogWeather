@@ -5,9 +5,16 @@ import type { Place } from '../domain/types'
 type Props = {
   selected: Place | null
   onSelect: (place: Place) => void
+  locating?: boolean
+  onUseMyLocation?: () => void
 }
 
-export function PlaceSearch({ selected, onSelect }: Props) {
+export function PlaceSearch({
+  selected,
+  onSelect,
+  locating = false,
+  onUseMyLocation,
+}: Props) {
   const listId = useId()
   const [text, setText] = useState(selected ? formatPlaceLabel(selected) : '')
   const [results, setResults] = useState<Place[]>([])
@@ -82,6 +89,44 @@ export function PlaceSearch({ selected, onSelect }: Props) {
           aria-controls={listId}
           aria-autocomplete="list"
         />
+        {onUseMyLocation && (
+          <button
+            type="button"
+            className="icon-btn locate-btn"
+            onClick={onUseMyLocation}
+            disabled={locating}
+            aria-label={locating ? 'Detecting location' : 'Use my location'}
+            title={locating ? 'Detecting location…' : 'Use my location'}
+          >
+            {locating ? (
+              <span className="locate-spinner" aria-hidden="true" />
+            ) : (
+              <svg
+                className="icon"
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                />
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  d="M12 2v3M12 19v3M2 12h3M19 12h3"
+                />
+              </svg>
+            )}
+          </button>
+        )}
         {loading && <span className="muted spinner-hint">Searching…</span>}
       </div>
       {error && <p className="error-text">{error}</p>}

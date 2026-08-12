@@ -96,82 +96,148 @@ export async function reverseGeocode(
   }
 }
 
-/** Browser geolocation → place. Rejects with a clear Error on deny/timeout. */
-export function detectCurrentPlace(options?: {
-  signal?: AbortSignal
-  timeoutMs?: number
-}): Promise<Place> {
-  const timeoutMs = options?.timeoutMs ?? 12_000
-  const signal = options?.signal
+function placeFromCoords(latitude: number, longitude: number): Place {
+  return {
+    id: `geo:${latitude.toFixed(4)},${longitude.toFixed(4)}`,
+    name: 'Your location',
+    country: 'Unknown',
+    countryCode: 'XX',
+    latitude,
+    longitude,
+  }
+}
 
+function getPositionOnce(options: PositionOptions): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error('Location services are not available in this browser'))
       return
     }
+    navigator.geolocation.getCurrentPosition(resolve, reject, options)
+  })
+}
 
-    let settled = false
-    const finish = (fn: () => void) => {
-      if (settled) return
-      settled = true
-      signal?.removeEventListener('abort', onAbort)
-      fn()
-    }
+/** Shared in-flight detect so React Strict Mode remounts don't race two GPS calls. */
+let detectInflight: Promise<Place> | null = null
 
+/**
+ * Browser geolocation → place.
+ *
+ * Timeout must be generous: the PositionOptions timer often runs while the
+ * permission dialog is open, so a short timeout fails right after the user
+ * clicks Allow. We accept a recent cached fix, then retry once on timeout.
+ */
+export function detectCurrentPlace(options?: {
+  signal?: AbortSignal
+  /** Per-attempt geolocation timeout (default 45s). */
+  timeoutMs?: number
+}): Promise<Place> {
+  const signal = options?.signal
+  if (signal?.aborted) {
+    return Promise.reject(new DOMException('Aborted', 'AbortError'))
+  }
+
+  // Reuse a single browser request when callers overlap (e.g. Strict Mode).
+  if (!detectInflight) {
+    detectInflight = runDetectCurrentPlace(options).finally(() => {
+      detectInflight = null
+    })
+  }
+
+  const shared = detectInflight
+  if (!signal) return shared
+
+  return new Promise((resolve, reject) => {
     const onAbort = () => {
-      finish(() => reject(new DOMException('Aborted', 'AbortError')))
+      reject(new DOMException('Aborted', 'AbortError'))
     }
-    if (signal) {
-      if (signal.aborted) {
-        onAbort()
-        return
-      }
-      signal.addEventListener('abort', onAbort)
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const place = await reverseGeocode(
-            pos.coords.latitude,
-            pos.coords.longitude,
-            signal,
-          )
-          finish(() => resolve(place))
-        } catch (e) {
-          // Still usable for weather if reverse geocode fails
-          if ((e as Error).name === 'AbortError') {
-            finish(() => reject(e))
-            return
-          }
-          finish(() =>
-            resolve({
-              id: `geo:${pos.coords.latitude.toFixed(4)},${pos.coords.longitude.toFixed(4)}`,
-              name: 'Your location',
-              country: 'Unknown',
-              countryCode: 'XX',
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-            }),
-          )
-        }
+    signal.addEventListener('abort', onAbort, { once: true })
+    shared.then(
+      (place) => {
+        signal.removeEventListener('abort', onAbort)
+        if (signal.aborted) onAbort()
+        else resolve(place)
       },
       (err) => {
-        const msg =
-          err.code === err.PERMISSION_DENIED
-            ? 'Location permission denied'
-            : err.code === err.POSITION_UNAVAILABLE
-              ? 'Location unavailable'
-              : 'Location request timed out'
-        finish(() => reject(new Error(msg)))
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: timeoutMs,
-        maximumAge: 5 * 60 * 1000,
+        signal.removeEventListener('abort', onAbort)
+        if (signal.aborted) onAbort()
+        else reject(err)
       },
     )
   })
+}
+
+async function runDetectCurrentPlace(options?: {
+  signal?: AbortSignal
+  timeoutMs?: number
+}): Promise<Place> {
+  const timeoutMs = options?.timeoutMs ?? 45_000
+  const signal = options?.signal
+
+  if (!navigator.geolocation) {
+    throw new Error('Location services are not available in this browser')
+  }
+
+  const attempts: PositionOptions[] = [
+    // Prefer a recent cached position — fast after permission is granted.
+    {
+      enableHighAccuracy: false,
+      timeout: timeoutMs,
+      maximumAge: 30 * 60 * 1000,
+    },
+    // Retry: allow a fresh network/OS fix if the first attempt timed out.
+    {
+      enableHighAccuracy: false,
+      timeout: Math.max(timeoutMs, 60_000),
+      maximumAge: 0,
+    },
+  ]
+
+  let lastError: GeolocationPositionError | Error | null = null
+
+  for (let i = 0; i < attempts.length; i++) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+    try {
+      const pos = await getPositionOnce(attempts[i]!)
+      try {
+        return await reverseGeocode(
+          pos.coords.latitude,
+          pos.coords.longitude,
+          signal,
+        )
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') throw e
+        // Coords alone are enough for weather if reverse geocode fails.
+        return placeFromCoords(pos.coords.latitude, pos.coords.longitude)
+      }
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') throw e
+      lastError = e as GeolocationPositionError | Error
+      const code = (e as GeolocationPositionError).code
+      // Only retry timeouts; permission deny / unavailable won't improve.
+      if (code !== 3 /* TIMEOUT */) break
+    }
+  }
+
+  const geoErr = lastError as GeolocationPositionError | null
+  if (geoErr && typeof geoErr.code === 'number') {
+    if (geoErr.code === geoErr.PERMISSION_DENIED) {
+      throw new Error('Location permission denied')
+    }
+    if (geoErr.code === geoErr.POSITION_UNAVAILABLE) {
+      throw new Error(
+        'Location unavailable — check that location services are on',
+      )
+    }
+    throw new Error(
+      'Location request timed out — try again or search for a place',
+    )
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Could not detect location')
 }
 
 export function formatPlaceLabel(place: Place): string {

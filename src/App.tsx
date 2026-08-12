@@ -70,28 +70,52 @@ export default function App() {
     writeQueryToUrl(query, true)
   }, [query])
 
-  // Default to the user's current location when the URL has no place
-  useEffect(() => {
-    if (hadPlaceInUrl) return
-
-    const ac = new AbortController()
+  const locateUser = useCallback(async (onlyIfEmpty = false) => {
     setLocating(true)
     setLocationHint(null)
+    try {
+      const p = await detectCurrentPlace()
+      setPlace((current) => {
+        if (onlyIfEmpty && current) return current
+        return p
+      })
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') return
+      setLocationHint(
+        (e as Error).message ||
+          'Could not detect location — search for a place instead.',
+      )
+    } finally {
+      setLocating(false)
+    }
+  }, [])
 
-    detectCurrentPlace({ signal: ac.signal })
+  // Default to the user's current location when the URL has no place.
+  // Do not abort on unmount: React Strict Mode remounts once in dev and
+  // aborting mid-permission/fix is a common cause of false timeouts.
+  useEffect(() => {
+    if (hadPlaceInUrl) return
+    let active = true
+    setLocating(true)
+    setLocationHint(null)
+    detectCurrentPlace()
       .then((p) => {
+        if (!active) return
         setPlace((current) => current ?? p)
       })
       .catch((e) => {
-        if ((e as Error).name === 'AbortError') return
+        if (!active || (e as Error).name === 'AbortError') return
         setLocationHint(
           (e as Error).message ||
             'Could not detect location — search for a place instead.',
         )
       })
-      .finally(() => setLocating(false))
-
-    return () => ac.abort()
+      .finally(() => {
+        if (active) setLocating(false)
+      })
+    return () => {
+      active = false
+    }
   }, [hadPlaceInUrl])
 
   // Load history when place changes
@@ -285,7 +309,15 @@ export default function App() {
       </header>
 
       <section className="controls panel">
-        <PlaceSearch selected={place} onSelect={onSelectPlace} />
+        <PlaceSearch
+          selected={place}
+          onSelect={onSelectPlace}
+          locating={locating}
+          onUseMyLocation={() => locateUser(false)}
+        />
+        {locationHint && place && (
+          <p className="error-text location-hint">{locationHint}</p>
+        )}
 
         <div className="control-grid">
           <div>
