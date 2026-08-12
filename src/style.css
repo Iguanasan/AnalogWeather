@@ -1,6 +1,8 @@
-/* Brand: Industrial Zen — brand-design.md */
+/* Brand: Industrial Zen — brand-design.md
+   Dark mode (forced): deep neutral field, brand light text, purple / green accents.
+   Light tokens kept commented for easy restore later. */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
   /* Palette */
   --brand-purple: #82538d;
   --brand-green: #67934c;
@@ -8,18 +10,18 @@
   --brand-light: #eae4d8;
   --brand-white: #ffffff;
 
-  /* Dark theme (default) */
-  --bg: #2e2c34;
+  /* Dark theme */
+  --bg: #1c1b20;
   --panel: #3b3943;
-  --panel-2: #48464f;
-  --text: #ffffff;
-  --muted: #c4bdb0;
-  --border: #5a5762;
-  --grid: #5a5762;
+  --panel-2: #2a2830;
+  --text: #eae4d8;
+  --muted: #a39e93;
+  --border: #5c5866;
+  --grid: #4a4654;
   --accent: #82538d;
   --accent-2: #67934c;
-  --accent-soft: rgba(130, 83, 141, 0.22);
-  --danger: #c45c5c;
+  --accent-soft: rgba(130, 83, 141, 0.28);
+  --danger: #e07a7a;
   --radius: 10px;
   /* Brand guide: Roboto / Roboto Flex for all UI text */
   --font: "Roboto Flex", "Roboto", system-ui, -apple-system, sans-serif;
@@ -33,6 +35,7 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* Light mode (disabled while previewing dark):
 @media (prefers-color-scheme: light) {
   :root {
     --bg: #eae4d8;
@@ -48,6 +51,7 @@
     --danger: #a33d3d;
   }
 }
+*/
 
 * {
   box-sizing: border-box;
@@ -659,7 +663,7 @@ input[type='date']:focus {
   padding: 1.25rem;
   padding-left: max(1.25rem, env(safe-area-inset-left));
   padding-right: max(1.25rem, env(safe-area-inset-right));
-  background: rgba(59, 57, 67, 0.55);
+  background: rgba(28, 27, 32, 0.72);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   animation: loading-fade-in 0.2s ease-out;
@@ -815,16 +819,10 @@ input[type='date']:focus {
   padding: 1.25rem;
   padding-left: max(1.25rem, env(safe-area-inset-left));
   padding-right: max(1.25rem, env(safe-area-inset-right));
-  background: rgba(15, 20, 25, 0.55);
+  background: rgba(28, 27, 32, 0.72);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   animation: loading-fade-in 0.28s ease-out;
-}
-
-@media (prefers-color-scheme: light) {
-  .loading-weather {
-    background: rgba(244, 247, 250, 0.62);
-  }
 }
 
 @keyframes loading-fade-in {
