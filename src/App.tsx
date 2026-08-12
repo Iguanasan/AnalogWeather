@@ -29,6 +29,8 @@ import { readQueryFromUrl, shareableUrl, writeQueryToUrl } from './lib/urlState'
 
 const LENGTHS: WindowLength[] = [1, 7, 30]
 
+type AnalogSort = 'date' | 'match'
+
 export default function App() {
   const initial = useMemo(() => readQueryFromUrl(), [])
   const hadPlaceInUrl = Boolean(initial.placeHint)
@@ -45,6 +47,7 @@ export default function App() {
   const [locationHint, setLocationHint] = useState<string | null>(null)
 
   const [analogs, setAnalogs] = useState<AnalogEpisode[]>([])
+  const [analogSort, setAnalogSort] = useState<AnalogSort>('date')
   const [selected, setSelected] = useState<AnalogEpisode | null>(null)
   const [computing, setComputing] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -150,14 +153,44 @@ export default function App() {
           topN: 24,
         })
         setAnalogs(results)
-        // Newest similar spell first
-        setSelected(results[0] ?? null)
+        // Selection follows sortedAnalogs (date or match order)
       } finally {
         setComputing(false)
       }
     }, 10)
     return () => window.clearTimeout(handle)
   }, [days, focal, length])
+
+  const sortedAnalogs = useMemo(() => {
+    if (analogSort === 'date') return analogs
+    return [...analogs].sort((a, b) => {
+      if (b.matchStrength !== a.matchStrength) {
+        return b.matchStrength - a.matchStrength
+      }
+      // Stronger first, then more recent on ties
+      return a.endDate < b.endDate ? 1 : a.endDate > b.endDate ? -1 : 0
+    })
+  }, [analogs, analogSort])
+
+  // Keep selection on a listed episode; pick the top of the current sort when
+  // results change or the selection is no longer in the list.
+  useEffect(() => {
+    if (sortedAnalogs.length === 0) {
+      setSelected(null)
+      return
+    }
+    setSelected((cur) => {
+      if (
+        cur &&
+        sortedAnalogs.some(
+          (ep) => ep.year === cur.year && ep.startDate === cur.startDate,
+        )
+      ) {
+        return cur
+      }
+      return sortedAnalogs[0] ?? null
+    })
+  }, [sortedAnalogs])
 
   const onSelectPlace = useCallback((p: Place) => {
     setPlace(p)
@@ -449,17 +482,48 @@ export default function App() {
           {focal && !loadingHistory && (
             <section className="results-layout">
               <div className="panel">
-                <h2 className="section-title">When it felt like this</h2>
+                <div className="panel-heading">
+                  <h2 className="section-title">When it felt like this</h2>
+                  <div className="sort-toggle">
+                    <span className="field-label sort-toggle-label" id="sort-label">
+                      Sort
+                    </span>
+                    <div
+                      className="segmented sort-segmented"
+                      role="group"
+                      aria-labelledby="sort-label"
+                    >
+                      <button
+                        type="button"
+                        className={analogSort === 'date' ? 'active' : ''}
+                        onClick={() => setAnalogSort('date')}
+                        aria-pressed={analogSort === 'date'}
+                      >
+                        Date
+                      </button>
+                      <button
+                        type="button"
+                        className={analogSort === 'match' ? 'active' : ''}
+                        onClick={() => setAnalogSort('match')}
+                        aria-pressed={analogSort === 'match'}
+                      >
+                        Match
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 <p className="muted section-help">
-                  Most recent first · one spell per year · only if close enough
-                  (score ≥ 50). +/− is warmer/cooler or wetter/drier than this
-                  spell.
+                  {analogSort === 'date'
+                    ? 'Most recent first'
+                    : 'Strongest match first'}{' '}
+                  · one spell per year · only if close enough (score ≥ 50). +/−
+                  is warmer/cooler or wetter/drier than this spell.
                 </p>
                 {computing ? (
                   <p className="muted">Searching the record…</p>
                 ) : (
                   <AnalogList
-                    analogs={analogs}
+                    analogs={sortedAnalogs}
                     focal={focal.series}
                     selectedYear={selected?.year ?? null}
                     onSelect={setSelected}
