@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ARCHIVE_START, streamDailyHistory } from './api/archive'
+import {
+  ARCHIVE_START,
+  streamDailyHistory,
+  toUserHistoryError,
+} from './api/archive'
 import { detectCurrentPlace, formatPlaceLabel } from './api/geocode'
 import { AnalogList } from './components/AnalogList'
 import { LoadingWeather } from './components/LoadingWeather'
@@ -55,7 +59,13 @@ export default function App() {
   const [awaitingFirstChunk, setAwaitingFirstChunk] = useState(false)
   /** Background archive stream after first paint. */
   const [streamStatus, setStreamStatus] = useState<StreamStatus | null>(null)
-  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [historyError, setHistoryError] = useState<{
+    title: string
+    detail: string
+    kind: string
+  } | null>(null)
+  /** Bump to retry archive load for the same place after an error. */
+  const [historyReloadKey, setHistoryReloadKey] = useState(0)
   const [locating, setLocating] = useState(!hadPlaceInUrl)
   const [locationHint, setLocationHint] = useState<string | null>(null)
 
@@ -158,7 +168,7 @@ export default function App() {
     setDays(null)
     setAnalogs([])
     setSelected(null)
-    setStreamStatus({ progress: 0, label: 'recent years', done: false })
+    setStreamStatus({ progress: 0, label: 'historical record', done: false })
 
     let first = true
 
@@ -210,21 +220,21 @@ export default function App() {
             setStreamStatus(null)
           }
 
-          // Let the browser paint between chunks
+          // Let the browser paint between updates
           await new Promise<void>((r) => {
             window.setTimeout(r, 0)
           })
         }
       } catch (e) {
         if ((e as Error).name === 'AbortError') return
-        setHistoryError((e as Error).message || 'Failed to load history')
+        setHistoryError(toUserHistoryError(e))
         setAwaitingFirstChunk(false)
         setStreamStatus(null)
       }
     })()
 
     return () => ac.abort()
-  }, [place])
+  }, [place, historyReloadKey])
 
   const focal = useMemo(() => {
     if (!days || !effectiveAnchor) return null
@@ -526,18 +536,42 @@ export default function App() {
 
       {place && (
         <>
-          {(awaitingFirstChunk || streaming) && (
+          {(awaitingFirstChunk || streaming) && !historyError && (
             <LoadingWeather
               stage="history"
               variant="banner"
-              progress={streamStatus?.progress ?? 0.08}
-              detail={
-                awaitingFirstChunk
-                  ? 'Fetching recent years first…'
-                  : `Scanning ${streamStatus?.label ?? 'history'} — results update as we go`
-              }
+              progress={streamStatus?.progress ?? 0.15}
+              detail="Collecting historical weather from the open archive… this can take a moment."
               placeLabel={formatPlaceLabel(place)}
             />
+          )}
+
+          {historyError && (
+            <section
+              className={`panel history-error-panel${
+                historyError.kind === 'rate_limit' ? ' history-error-panel--rate' : ''
+              }`}
+              role="alert"
+            >
+              <h2 className="history-error-title">{historyError.title}</h2>
+              <p className="history-error-detail">{historyError.detail}</p>
+              {historyError.kind === 'rate_limit' && (
+                <p className="muted history-error-hint">
+                  Tip: waiting a couple of minutes usually works. We only ask the
+                  free archive once per place and remember the result afterward.
+                </p>
+              )}
+              <button
+                type="button"
+                className="secondary-btn history-error-retry"
+                onClick={() => {
+                  setHistoryError(null)
+                  setHistoryReloadKey((k) => k + 1)
+                }}
+              >
+                Try again
+              </button>
+            </section>
           )}
 
           <section className="panel status-bar">
@@ -564,11 +598,10 @@ export default function App() {
               {streaming && (
                 <span className="muted">
                   {' '}
-                  Still filling older years…
+                  Loading the historical record…
                 </span>
               )}
             </div>
-            {historyError && <p className="error-text">{historyError}</p>}
           </section>
 
           {focal && focalStats && (

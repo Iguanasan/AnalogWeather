@@ -13,22 +13,26 @@ type ArchiveResponse = {
 export const ARCHIVE_START_YEAR = 1940
 export const ARCHIVE_START = `${ARCHIVE_START_YEAR}-01-01`
 
-/** Recent years first for a fast first paint; remainder loads in one follow-up. */
-const FIRST_CHUNK_YEARS = 5
+/**
+ * Open-Meteo free / open-access guidance (terms + pricing):
+ * - Non-commercial use
+ * - Fair-use limits (IP-based): 600/min, 5_000/hour, 10_000/day
+ * - Attribution under CC BY 4.0
+ * - Prefer fewer, larger requests; cache; avoid hammering after 429
+ *
+ * We make at most one archive call per place (full history), share in-flight
+ * work across remounts, cache complete results, and back off on 429.
+ */
 
-/** In-memory cache of *complete* histories only. */
-const HISTORY_CACHE_MAX = 6
+/** In-memory cache of complete histories. */
+const HISTORY_CACHE_MAX = 8
 const historyCache = new Map<
   string,
   { days: DailyObservation[]; endDate: string; timezone: string }
 >()
 
-/** Dedupe concurrent streams (React Strict Mode remounts, rapid re-select). */
-const inflightStreams = new Map<string, Promise<void>>()
-const streamListeners = new Map<
-  string,
-  Set<(update: HistoryStreamUpdate) => void>
->()
+/** Dedupe concurrent loads (React Strict Mode, rapid re-select). */
+const inflightByKey = new Map<string, Promise<HistoryStreamUpdate>>()
 
 export type HistoryStreamUpdate = {
   /** Cumulative days loaded so far, chronological (oldest → newest). */
@@ -37,24 +41,45 @@ export type HistoryStreamUpdate = {
   newDays: DailyObservation[]
   archiveEnd: string
   timezone: string
-  /** Inclusive ISO range of this chunk. */
   chunkStart: string
   chunkEnd: string
-  /** 0–1 estimate of archive coverage. */
   progress: number
   done: boolean
-  /** Human label, e.g. "2020–2025". */
   label: string
 }
+
+/** Friendly, non-technical errors for the UI. */
+export class WeatherArchiveError extends Error {
+  readonly kind: 'rate_limit' | 'http' | 'empty' | 'unknown'
+  /** Short title for the error panel. */
+  readonly title: string
+  /** Plain-language body for the user. */
+  readonly detail: string
+
+  constructor(
+    kind: WeatherArchiveError['kind'],
+    title: string,
+    detail: string,
+    technicalMessage?: string,
+  ) {
+    super(technicalMessage ?? title)
+    this.name = 'WeatherArchiveError'
+    this.kind = kind
+    this.title = title
+    this.detail = detail
+  }
+}
+
+export const RATE_LIMIT_TITLE = 'The weather archive needs a short break'
+export const RATE_LIMIT_DETAIL =
+  'We use a free, shared open-data weather service (Open-Meteo). ' +
+  'To keep it available for everyone, it limits how many times anyone can ask for data. ' +
+  'We’ve hit that limit for now. Please wait a minute or two, then try again.'
 
 function yesterdayUtc(): string {
   const d = new Date()
   d.setUTCDate(d.getUTCDate() - 1)
   return d.toISOString().slice(0, 10)
-}
-
-function yearOf(iso: string): number {
-  return Number(iso.slice(0, 4))
 }
 
 function cacheKey(place: Place, endDate: string): string {
@@ -126,58 +151,29 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Two phases only (not one request per decade) to stay under Open-Meteo limits:
- * 1) last ~5 years for a quick Live paint
- * 2) remainder back to 1940 in a single follow-up request
+ * One full-history request (1940 → yesterday). Most polite pattern for
+ * Open-Meteo free tier: minimize call count, cache, don't burst.
  */
-export function buildHistoryChunkRanges(
-  archiveEnd: string,
-  archiveStartYear = ARCHIVE_START_YEAR,
-): { start: string; end: string; label: string }[] {
-  const endYear = yearOf(archiveEnd)
-  const recentLow = Math.max(archiveStartYear, endYear - FIRST_CHUNK_YEARS + 1)
-  const ranges: { start: string; end: string; label: string }[] = [
-    {
-      start: `${recentLow}-01-01`,
-      end: archiveEnd,
-      label:
-        recentLow === endYear ? String(endYear) : `${recentLow}–${endYear}`,
-    },
-  ]
-
-  if (recentLow > archiveStartYear) {
-    const olderEndYear = recentLow - 1
-    ranges.push({
-      start: ARCHIVE_START,
-      end: `${olderEndYear}-12-31`,
-      label: `${archiveStartYear}–${olderEndYear}`,
-    })
-  }
-
-  return ranges
-}
-
-async function fetchRange(
+async function fetchFullHistory(
   place: Place,
-  startDate: string,
-  endDate: string,
+  archiveEnd: string,
   signal?: AbortSignal,
 ): Promise<{ days: DailyObservation[]; timezone: string }> {
   const url = new URL('https://archive-api.open-meteo.com/v1/archive')
   url.searchParams.set('latitude', String(place.latitude))
   url.searchParams.set('longitude', String(place.longitude))
-  url.searchParams.set('start_date', startDate)
-  url.searchParams.set('end_date', endDate)
+  url.searchParams.set('start_date', ARCHIVE_START)
+  url.searchParams.set('end_date', archiveEnd)
   url.searchParams.set(
     'daily',
     'temperature_2m_max,temperature_2m_min,precipitation_sum',
   )
   url.searchParams.set('timezone', 'auto')
 
-  let attempt = 0
-  const maxAttempts = 8
+  // At most one gentle retry after a long pause — never a rapid retry storm
+  const maxAttempts = 2
 
-  while (true) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (signal?.aborted) {
       throw new DOMException('Aborted', 'AbortError')
     }
@@ -185,32 +181,41 @@ async function fetchRange(
     const res = await fetch(url, { signal })
 
     if (res.status === 429) {
-      attempt++
       if (attempt >= maxAttempts) {
-        throw new Error(
-          'Weather archive rate-limited (429). Wait a minute and try again, or pick another place.',
+        throw new WeatherArchiveError(
+          'rate_limit',
+          RATE_LIMIT_TITLE,
+          RATE_LIMIT_DETAIL,
+          'Open-Meteo rate limit (429)',
         )
       }
+      // Wait well beyond a short burst window before one polite retry
       const retryAfter = Number(res.headers.get('Retry-After'))
       const waitMs =
         Number.isFinite(retryAfter) && retryAfter > 0
-          ? Math.max(retryAfter * 1000, 3000)
-          : Math.min(2000 * 2 ** attempt, 45_000)
+          ? Math.max(retryAfter * 1000, 15_000)
+          : 20_000
       await sleep(waitMs, signal)
       continue
     }
 
     if (!res.ok) {
-      throw new Error(`Weather archive failed (${res.status})`)
+      throw new WeatherArchiveError(
+        'http',
+        'Could not load weather history',
+        'Something went wrong while fetching the historical weather record. Please try again in a moment.',
+        `Weather archive failed (${res.status})`,
+      )
     }
 
     const data = (await res.json()) as ArchiveResponse
     const daily = data.daily
     if (!daily?.time?.length) {
-      return {
-        days: [],
-        timezone: data.timezone ?? place.timezone ?? 'UTC',
-      }
+      throw new WeatherArchiveError(
+        'empty',
+        'No weather history for this place',
+        'The open weather archive did not return daily data for this location. Try a nearby city or another place.',
+      )
     }
 
     return {
@@ -218,75 +223,18 @@ async function fetchRange(
       timezone: data.timezone ?? place.timezone ?? 'UTC',
     }
   }
-}
 
-async function runHistoryStream(
-  place: Place,
-  key: string,
-  archiveEnd: string,
-  emit: (update: HistoryStreamUpdate) => void,
-  signal?: AbortSignal,
-): Promise<void> {
-  const ranges = buildHistoryChunkRanges(archiveEnd)
-  const total = ranges.length
-  let cumulative: DailyObservation[] = []
-  let timezone = place.timezone ?? 'UTC'
-
-  for (let i = 0; i < ranges.length; i++) {
-    if (signal?.aborted) {
-      throw new DOMException('Aborted', 'AbortError')
-    }
-
-    const range = ranges[i]!
-    const { days: chunkDays, timezone: tz } = await fetchRange(
-      place,
-      range.start,
-      range.end,
-      signal,
-    )
-    timezone = tz
-
-    if (i === 0) {
-      cumulative = chunkDays
-    } else if (chunkDays.length) {
-      const firstExisting = cumulative[0]?.date
-      const filtered = firstExisting
-        ? chunkDays.filter((d) => d.date < firstExisting)
-        : chunkDays
-      cumulative = filtered.length ? [...filtered, ...cumulative] : cumulative
-    }
-
-    const done = i === total - 1
-    emit({
-      days: cumulative,
-      newDays: chunkDays,
-      archiveEnd,
-      timezone,
-      chunkStart: range.start,
-      chunkEnd: range.end,
-      progress: (i + 1) / total,
-      done,
-      label: range.label,
-    })
-
-    // Pause before the large historical pull so free-tier limits can recover
-    if (!done) {
-      await sleep(800, signal)
-    }
-  }
-
-  if (cumulative.length) {
-    cacheSet(key, {
-      days: cumulative,
-      endDate: archiveEnd,
-      timezone,
-    })
-  }
+  throw new WeatherArchiveError(
+    'rate_limit',
+    RATE_LIMIT_TITLE,
+    RATE_LIMIT_DETAIL,
+    'Open-Meteo rate limit (429)',
+  )
 }
 
 /**
- * Stream history recent-first (2 phases max). Shared per place so React Strict
- * Mode and rapid remounts do not fire duplicate Open-Meteo storms.
+ * Load full history for a place. Yields one completed update (or cache hit).
+ * Shared per place so remounts do not double-call Open-Meteo.
  */
 export async function* streamDailyHistory(
   place: Place,
@@ -310,83 +258,79 @@ export async function* streamDailyHistory(
     return
   }
 
-  const queue: HistoryStreamUpdate[] = []
-  let resolveWait: (() => void) | null = null
-  let streamError: unknown = null
-  let finished = false
-
-  const wake = () => {
-    resolveWait?.()
-    resolveWait = null
-  }
-
-  const listener = (update: HistoryStreamUpdate) => {
-    queue.push(update)
-    wake()
-  }
-
-  let listeners = streamListeners.get(key)
-  if (!listeners) {
-    listeners = new Set()
-    streamListeners.set(key, listeners)
-  }
-  listeners.add(listener)
-
-  if (!inflightStreams.has(key)) {
-    const run = runHistoryStream(
-      place,
-      key,
-      archiveEnd,
-      (update) => {
-        const set = streamListeners.get(key)
-        if (!set) return
-        for (const fn of set) fn(update)
-      },
-      // Do not bind to the first subscriber's signal — shared work should finish
-      // for other listeners. Individual consumers stop reading when they abort.
-      undefined,
-    )
-      .catch((e) => {
-        streamError = e
-        wake()
+  let pending = inflightByKey.get(key)
+  if (!pending) {
+    pending = fetchFullHistory(place, archiveEnd)
+      .then(({ days, timezone }) => {
+        cacheSet(key, { days, endDate: archiveEnd, timezone })
+        const update: HistoryStreamUpdate = {
+          days,
+          newDays: days,
+          archiveEnd,
+          timezone,
+          chunkStart: days[0]?.date ?? ARCHIVE_START,
+          chunkEnd: archiveEnd,
+          progress: 1,
+          done: true,
+          label: `${ARCHIVE_START_YEAR}–${archiveEnd.slice(0, 4)}`,
+        }
+        return update
       })
       .finally(() => {
-        finished = true
-        inflightStreams.delete(key)
-        streamListeners.delete(key)
-        wake()
+        inflightByKey.delete(key)
       })
-    inflightStreams.set(key, run)
+    inflightByKey.set(key, pending)
   }
 
-  try {
-    while (true) {
-      if (signal?.aborted) {
-        throw new DOMException('Aborted', 'AbortError')
-      }
-      while (queue.length) {
-        yield queue.shift()!
-      }
-      if (streamError) throw streamError
-      if (finished && queue.length === 0) break
-      await new Promise<void>((resolve) => {
-        resolveWait = resolve
-        if (signal) {
-          const onAbort = () => {
-            resolveWait = null
-            resolve()
-          }
-          signal.addEventListener('abort', onAbort, { once: true })
-        }
-      })
-      if (signal?.aborted) {
-        throw new DOMException('Aborted', 'AbortError')
-      }
+  // If this subscriber aborts, others may still need the result
+  const update = await new Promise<HistoryStreamUpdate>((resolve, reject) => {
+    const onAbort = () => {
+      reject(new DOMException('Aborted', 'AbortError'))
     }
-  } finally {
-    listeners.delete(listener)
-    if (listeners.size === 0) {
-      streamListeners.delete(key)
+    if (signal?.aborted) {
+      onAbort()
+      return
     }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    pending!.then(
+      (u) => {
+        signal?.removeEventListener('abort', onAbort)
+        resolve(u)
+      },
+      (e) => {
+        signal?.removeEventListener('abort', onAbort)
+        reject(e)
+      },
+    )
+  })
+
+  yield update
+}
+
+export function isRateLimitError(e: unknown): e is WeatherArchiveError {
+  return e instanceof WeatherArchiveError && e.kind === 'rate_limit'
+}
+
+export function toUserHistoryError(e: unknown): {
+  title: string
+  detail: string
+  kind: WeatherArchiveError['kind'] | 'unknown'
+} {
+  if (e instanceof WeatherArchiveError) {
+    return { title: e.title, detail: e.detail, kind: e.kind }
+  }
+  const msg = (e as Error)?.message ?? ''
+  if (/429|rate.?limit/i.test(msg)) {
+    return {
+      title: RATE_LIMIT_TITLE,
+      detail: RATE_LIMIT_DETAIL,
+      kind: 'rate_limit',
+    }
+  }
+  return {
+    title: 'Could not load weather history',
+    detail:
+      'Something went wrong while loading historical weather. Please try again in a moment.',
+    kind: 'unknown',
   }
 }

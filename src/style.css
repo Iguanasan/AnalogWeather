@@ -360,6 +360,41 @@ input[type='date']:focus {
   margin: 0.5rem 0 0;
 }
 
+.history-error-panel {
+  border-color: var(--danger);
+  background: var(--panel);
+}
+
+.history-error-panel--rate {
+  border-color: var(--brand-purple);
+}
+
+.history-error-title {
+  margin: 0 0 0.45rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--brand-purple);
+}
+
+.history-error-detail {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text);
+  max-width: 40rem;
+}
+
+.history-error-hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  max-width: 40rem;
+}
+
+.history-error-retry {
+  margin-top: 0.9rem;
+}
+
 .empty-state p {
   margin: 0;
   color: var(--muted);
