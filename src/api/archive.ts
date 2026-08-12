@@ -13,15 +13,21 @@ type ArchiveResponse = {
 export const ARCHIVE_START_YEAR = 1940
 export const ARCHIVE_START = `${ARCHIVE_START_YEAR}-01-01`
 
-/** Recent years first for a fast first paint; older decades stream in later. */
+/** Recent years first for a fast first paint; remainder loads in one follow-up. */
 const FIRST_CHUNK_YEARS = 5
-const BACK_CHUNK_YEARS = 10
 
 /** In-memory cache of *complete* histories only. */
 const HISTORY_CACHE_MAX = 6
 const historyCache = new Map<
   string,
   { days: DailyObservation[]; endDate: string; timezone: string }
+>()
+
+/** Dedupe concurrent streams (React Strict Mode remounts, rapid re-select). */
+const inflightStreams = new Map<string, Promise<void>>()
+const streamListeners = new Map<
+  string,
+  Set<(update: HistoryStreamUpdate) => void>
 >()
 
 export type HistoryStreamUpdate = {
@@ -120,34 +126,32 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Year-aligned ranges from recent → past.
- * First chunk is a short recent window so Live mode can render quickly.
+ * Two phases only (not one request per decade) to stay under Open-Meteo limits:
+ * 1) last ~5 years for a quick Live paint
+ * 2) remainder back to 1940 in a single follow-up request
  */
 export function buildHistoryChunkRanges(
   archiveEnd: string,
   archiveStartYear = ARCHIVE_START_YEAR,
 ): { start: string; end: string; label: string }[] {
   const endYear = yearOf(archiveEnd)
-  const ranges: { start: string; end: string; label: string }[] = []
+  const recentLow = Math.max(archiveStartYear, endYear - FIRST_CHUNK_YEARS + 1)
+  const ranges: { start: string; end: string; label: string }[] = [
+    {
+      start: `${recentLow}-01-01`,
+      end: archiveEnd,
+      label:
+        recentLow === endYear ? String(endYear) : `${recentLow}–${endYear}`,
+    },
+  ]
 
-  let high = endYear
-  // First chunk: last few years through archiveEnd
-  let low = Math.max(archiveStartYear, high - FIRST_CHUNK_YEARS + 1)
-  ranges.push({
-    start: `${low}-01-01`,
-    end: archiveEnd,
-    label: low === high ? String(high) : `${low}–${high}`,
-  })
-
-  high = low - 1
-  while (high >= archiveStartYear) {
-    low = Math.max(archiveStartYear, high - BACK_CHUNK_YEARS + 1)
+  if (recentLow > archiveStartYear) {
+    const olderEndYear = recentLow - 1
     ranges.push({
-      start: low === archiveStartYear ? ARCHIVE_START : `${low}-01-01`,
-      end: `${high}-12-31`,
-      label: low === high ? String(high) : `${low}–${high}`,
+      start: ARCHIVE_START,
+      end: `${olderEndYear}-12-31`,
+      label: `${archiveStartYear}–${olderEndYear}`,
     })
-    high = low - 1
   }
 
   return ranges
@@ -171,7 +175,7 @@ async function fetchRange(
   url.searchParams.set('timezone', 'auto')
 
   let attempt = 0
-  const maxAttempts = 6
+  const maxAttempts = 8
 
   while (true) {
     if (signal?.aborted) {
@@ -184,14 +188,14 @@ async function fetchRange(
       attempt++
       if (attempt >= maxAttempts) {
         throw new Error(
-          'Weather archive rate-limited (429). Wait a moment and try again.',
+          'Weather archive rate-limited (429). Wait a minute and try again, or pick another place.',
         )
       }
-      // Honor Retry-After when present; otherwise exponential backoff
       const retryAfter = Number(res.headers.get('Retry-After'))
-      const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
-        ? retryAfter * 1000
-        : Math.min(1000 * 2 ** attempt, 20_000)
+      const waitMs =
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.max(retryAfter * 1000, 3000)
+          : Math.min(2000 * 2 ** attempt, 45_000)
       await sleep(waitMs, signal)
       continue
     }
@@ -216,10 +220,73 @@ async function fetchRange(
   }
 }
 
+async function runHistoryStream(
+  place: Place,
+  key: string,
+  archiveEnd: string,
+  emit: (update: HistoryStreamUpdate) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const ranges = buildHistoryChunkRanges(archiveEnd)
+  const total = ranges.length
+  let cumulative: DailyObservation[] = []
+  let timezone = place.timezone ?? 'UTC'
+
+  for (let i = 0; i < ranges.length; i++) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
+
+    const range = ranges[i]!
+    const { days: chunkDays, timezone: tz } = await fetchRange(
+      place,
+      range.start,
+      range.end,
+      signal,
+    )
+    timezone = tz
+
+    if (i === 0) {
+      cumulative = chunkDays
+    } else if (chunkDays.length) {
+      const firstExisting = cumulative[0]?.date
+      const filtered = firstExisting
+        ? chunkDays.filter((d) => d.date < firstExisting)
+        : chunkDays
+      cumulative = filtered.length ? [...filtered, ...cumulative] : cumulative
+    }
+
+    const done = i === total - 1
+    emit({
+      days: cumulative,
+      newDays: chunkDays,
+      archiveEnd,
+      timezone,
+      chunkStart: range.start,
+      chunkEnd: range.end,
+      progress: (i + 1) / total,
+      done,
+      label: range.label,
+    })
+
+    // Pause before the large historical pull so free-tier limits can recover
+    if (!done) {
+      await sleep(800, signal)
+    }
+  }
+
+  if (cumulative.length) {
+    cacheSet(key, {
+      days: cumulative,
+      endDate: archiveEnd,
+      timezone,
+    })
+  }
+}
+
 /**
- * Stream history recent-first. Yields after each chunk so the UI can show
- * analogs as years arrive. Sequential requests + 429 backoff avoid hammering
- * Open-Meteo with one giant archive call.
+ * Stream history recent-first (2 phases max). Shared per place so React Strict
+ * Mode and rapid remounts do not fire duplicate Open-Meteo storms.
  */
 export async function* streamDailyHistory(
   place: Place,
@@ -243,57 +310,83 @@ export async function* streamDailyHistory(
     return
   }
 
-  const ranges = buildHistoryChunkRanges(archiveEnd)
-  const total = ranges.length
-  let cumulative: DailyObservation[] = []
-  let timezone = place.timezone ?? 'UTC'
+  const queue: HistoryStreamUpdate[] = []
+  let resolveWait: (() => void) | null = null
+  let streamError: unknown = null
+  let finished = false
 
-  for (let i = 0; i < ranges.length; i++) {
-    const range = ranges[i]!
-    const { days: chunkDays, timezone: tz } = await fetchRange(
-      place,
-      range.start,
-      range.end,
-      signal,
-    )
-    timezone = tz
-
-    // Older chunks prepend; first chunk is newest
-    if (i === 0) {
-      cumulative = chunkDays
-    } else if (chunkDays.length) {
-      // Drop any accidental overlap at year boundaries
-      const firstExisting = cumulative[0]?.date
-      const filtered = firstExisting
-        ? chunkDays.filter((d) => d.date < firstExisting)
-        : chunkDays
-      cumulative = filtered.length ? [...filtered, ...cumulative] : cumulative
-    }
-
-    const done = i === total - 1
-    yield {
-      days: cumulative,
-      newDays: chunkDays,
-      archiveEnd,
-      timezone,
-      chunkStart: range.start,
-      chunkEnd: range.end,
-      progress: (i + 1) / total,
-      done,
-      label: range.label,
-    }
-
-    // Brief pause between chunks — reduces 429s under free-tier limits
-    if (!done) {
-      await sleep(120, signal)
-    }
+  const wake = () => {
+    resolveWait?.()
+    resolveWait = null
   }
 
-  if (cumulative.length) {
-    cacheSet(key, {
-      days: cumulative,
-      endDate: archiveEnd,
-      timezone,
-    })
+  const listener = (update: HistoryStreamUpdate) => {
+    queue.push(update)
+    wake()
+  }
+
+  let listeners = streamListeners.get(key)
+  if (!listeners) {
+    listeners = new Set()
+    streamListeners.set(key, listeners)
+  }
+  listeners.add(listener)
+
+  if (!inflightStreams.has(key)) {
+    const run = runHistoryStream(
+      place,
+      key,
+      archiveEnd,
+      (update) => {
+        const set = streamListeners.get(key)
+        if (!set) return
+        for (const fn of set) fn(update)
+      },
+      // Do not bind to the first subscriber's signal — shared work should finish
+      // for other listeners. Individual consumers stop reading when they abort.
+      undefined,
+    )
+      .catch((e) => {
+        streamError = e
+        wake()
+      })
+      .finally(() => {
+        finished = true
+        inflightStreams.delete(key)
+        streamListeners.delete(key)
+        wake()
+      })
+    inflightStreams.set(key, run)
+  }
+
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError')
+      }
+      while (queue.length) {
+        yield queue.shift()!
+      }
+      if (streamError) throw streamError
+      if (finished && queue.length === 0) break
+      await new Promise<void>((resolve) => {
+        resolveWait = resolve
+        if (signal) {
+          const onAbort = () => {
+            resolveWait = null
+            resolve()
+          }
+          signal.addEventListener('abort', onAbort, { once: true })
+        }
+      })
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError')
+      }
+    }
+  } finally {
+    listeners.delete(listener)
+    if (listeners.size === 0) {
+      streamListeners.delete(key)
+    }
   }
 }
