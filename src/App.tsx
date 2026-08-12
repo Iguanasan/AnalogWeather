@@ -182,6 +182,53 @@ export default function App() {
             Find past spells with temperature and rain like this day, week, or month.
           </p>
         </div>
+        <button
+          type="button"
+          className={`icon-btn share-btn${copied ? ' copied' : ''}`}
+          disabled={!place}
+          onClick={copyShareLink}
+          aria-label={copied ? 'Link copied' : 'Share link'}
+          title={copied ? 'Link copied' : 'Copy share link'}
+        >
+          {copied ? (
+            <svg
+              className="icon"
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              aria-hidden="true"
+            >
+              <path
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          ) : (
+            <svg
+              className="icon"
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              aria-hidden="true"
+            >
+              {/* Share-nodes: three dots connected as a graph */}
+              <circle cx="18" cy="5" r="2.5" fill="currentColor" />
+              <circle cx="6" cy="12" r="2.5" fill="currentColor" />
+              <circle cx="18" cy="19" r="2.5" fill="currentColor" />
+              <path
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                d="M8.4 10.8l7.2-4.6M8.4 13.2l7.2 4.6"
+              />
+            </svg>
+          )}
+        </button>
       </header>
 
       <section className="controls panel">
@@ -227,7 +274,7 @@ export default function App() {
             </div>
           </div>
 
-          <div>
+          <div className="anchor-field">
             <label className="field-label" htmlFor="anchor-date">
               {length === 1 ? 'Selected Day' : 'Period Ending'}
             </label>
@@ -243,57 +290,6 @@ export default function App() {
                 setAnchorDate(e.target.value || null)
               }}
             />
-          </div>
-
-          <div className="share-wrap">
-            <span className="field-label">Share</span>
-            <button
-              type="button"
-              className={`icon-btn share-btn${copied ? ' copied' : ''}`}
-              disabled={!place}
-              onClick={copyShareLink}
-              aria-label={copied ? 'Link copied' : 'Share link'}
-              title={copied ? 'Link copied' : 'Copy share link'}
-            >
-              {copied ? (
-                <svg
-                  className="icon"
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  aria-hidden="true"
-                >
-                  <path
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  className="icon"
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  aria-hidden="true"
-                >
-                  {/* Share-nodes: three dots connected as a graph */}
-                  <circle cx="18" cy="5" r="2.5" fill="currentColor" />
-                  <circle cx="6" cy="12" r="2.5" fill="currentColor" />
-                  <circle cx="18" cy="19" r="2.5" fill="currentColor" />
-                  <path
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    d="M8.4 10.8l7.2-4.6M8.4 13.2l7.2 4.6"
-                  />
-                </svg>
-              )}
-            </button>
           </div>
         </div>
       </section>

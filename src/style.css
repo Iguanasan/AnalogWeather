@@ -85,7 +85,16 @@ input {
 }
 
 .hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
   margin-bottom: 1.25rem;
+}
+
+.brand {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .brand h1 {
@@ -101,6 +110,11 @@ input {
   max-width: 40rem;
   font-size: clamp(0.92rem, 2.8vw, 1rem);
   line-height: 1.45;
+}
+
+.hero .share-btn {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
 }
 
 .panel {
@@ -483,12 +497,6 @@ input[type='date']:focus {
   flex-shrink: 0;
 }
 
-.share-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -550,7 +558,11 @@ input[type='date']:focus {
     margin-top: 0.85rem;
   }
 
-  /* Window | Mode, then Anchor | Share */
+  /* Anchor date spans full width under Window | Mode */
+  .control-grid .anchor-field {
+    grid-column: 1 / -1;
+  }
+
   .segmented button {
     min-height: 2.75rem;
     padding: 0.45rem 0.25rem;
