@@ -30,6 +30,32 @@ export function formatPrecip(mm: number, units: Units, digits = 1): string {
   return `${v.toFixed(digits)} ${u}`
 }
 
+/** Signed °C/°F delta for display, e.g. "+1.4°" or "−0.3°". */
+export function formatSignedTempDelta(
+  deltaC: number,
+  units: Units,
+  digits = 1,
+): string {
+  // Δ°F = Δ°C × 9/5 (offset cancels)
+  const v = units.temperature === 'F' ? (deltaC * 9) / 5 : deltaC
+  const sign = v > 0 ? '+' : v < 0 ? '−' : ''
+  const mag = Math.abs(v).toFixed(digits)
+  return `${sign}${mag}°`
+}
+
+/** Signed precip delta, e.g. "+3.2 mm" or "−0.1 in". */
+export function formatSignedPrecipDelta(
+  deltaMm: number,
+  units: Units,
+  digits = 1,
+): string {
+  const v = units.precip === 'in' ? mmToIn(deltaMm) : deltaMm
+  const u = units.precip === 'in' ? 'in' : 'mm'
+  const sign = v > 0 ? '+' : v < 0 ? '−' : ''
+  const mag = Math.abs(v).toFixed(digits)
+  return `${sign}${mag} ${u}`
+}
+
 export function tempUnitLabel(units: Units): string {
   return units.temperature === 'F' ? '°F' : '°C'
 }

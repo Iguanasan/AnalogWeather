@@ -8,7 +8,7 @@ People experience a short weather spell (warm week, wet stretch) and often treat
 
 ## Solution
 
-A public web app: search a **place**, choose **this day / week / month** (trailing 1 / 7 / 30 days), and see ranked past **analog episodes** — date ranges whose **temperature + precipitation** patterns best match — found by **sliding-window search over each full year**, keeping the **best episode per year**.
+A public web app: search a **place**, choose **this day / week / month** (trailing 1 / 7 / 30 days), and see past **analog episodes** that **felt similar** — date ranges whose **daily high, overnight low, and precipitation** patterns match closely enough — found by **sliding-window search over each full year**, keeping the **best episode per year**, listed **most recent first** (when it last felt like this).
 
 - **Live mode** defaults to the latest archive day  
 - **Explorer mode** allows any past anchor date  
@@ -38,7 +38,9 @@ You open it when weather feels notable **and** can send a link someone else unde
 | Analog episode | Past L-day window that matches; primary result |
 | Full-year search | Candidates may start any day of the year |
 | Best-per-year | One closest episode listed per year |
-| Blended score | Combined temp + precip similarity for ranking |
+| Blended score | Combined high + low + precip closeness (0–100); filter ≥ 50 |
+| Recency order | Similar spells listed newest first |
+| Signed delta | Analog − this spell (° / rain): warmer/cooler, wetter/drier |
 
 See session plan for full discovery log and decisions D1–D14.
 

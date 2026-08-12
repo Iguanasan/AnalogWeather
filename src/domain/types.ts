@@ -25,6 +25,11 @@ export type DailyObservation = {
 
 export type WeatherSeries = {
   dates: string[]
+  /** Daily high °C (what people remember as “the day”). */
+  tMax: number[]
+  /** Daily low °C (whether nights cool off). */
+  tMin: number[]
+  /** 24h mean °C (kept for secondary stats). */
   tMean: number[]
   precip: number[]
 }
@@ -47,7 +52,10 @@ export type AnalogEpisode = {
   distance: number
   /** 0–100 display score; higher is closer. */
   matchStrength: number
-  tempRmse: number
+  /** Daytime heat similarity (daily max RMSE °C). */
+  tempHighRmse: number
+  /** Night-time cool-down similarity (daily min RMSE °C). */
+  tempLowRmse: number
   precipRmse: number
 }
 

@@ -290,6 +290,15 @@ input[type='date']:focus {
   font-size: 0.92rem;
 }
 
+.focal-help {
+  margin-top: 0;
+}
+
+.chart-subhelp {
+  margin: -0.25rem 0 0.5rem;
+  font-size: 0.8rem;
+}
+
 .stat-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -400,6 +409,21 @@ input[type='date']:focus {
   color: var(--muted);
 }
 
+.delta-pos {
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+.delta-neg {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.delta-zero {
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .analog-score {
   text-align: right;
   flex-shrink: 0;
@@ -459,8 +483,46 @@ input[type='date']:focus {
   flex-shrink: 0;
 }
 
-.share-wrap .secondary-btn {
-  width: 100%;
+.share-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.icon-btn:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.icon-btn.copied {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.icon-btn .icon {
+  display: block;
 }
 
 /* —— Mobile layout —— */
@@ -638,6 +700,16 @@ input[type='date']:focus {
 
   .secondary-btn:not(:disabled):hover {
     border-color: var(--border);
+  }
+
+  .icon-btn:not(:disabled):hover {
+    border-color: var(--border);
+    color: var(--text);
+  }
+
+  .icon-btn.copied:hover {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .place-results button:hover {

@@ -5,11 +5,27 @@ import type {
   WindowLength,
 } from './types'
 
-/** Scale factors so temp (°C) and precip (mm) distances are comparable. */
+/**
+ * Scale factors so channel distances are comparable.
+ * High/low capture heat-wave feel better than 24h mean alone.
+ */
 const TEMP_SCALE_C = 5
 const PRECIP_SCALE_MM = 8
-const TEMP_WEIGHT = 0.6
+/** Hot days (blistering afternoons). */
+const HIGH_WEIGHT = 0.3
+/** Warm nights (didn’t cool off). */
+const LOW_WEIGHT = 0.3
 const PRECIP_WEIGHT = 0.4
+
+/**
+ * Minimum match strength (0–100) to count as “felt similar.”
+ *
+ * At strength 50, distance ≈ 1.0 — roughly the scale of ~5 °C high RMSE,
+ * ~5 °C low RMSE, and ~8 mm precip-day RMSE (our channel scales). Below
+ * that, spells are “in the same ballpark” but not what people mean by
+ * “it felt like this.”
+ */
+export const MIN_MATCH_STRENGTH = 50
 
 export type AnalogSearchOptions = {
   length: WindowLength
@@ -17,7 +33,10 @@ export type AnalogSearchOptions = {
   focalStart: string
   /** Inclusive end of focal episode (YYYY-MM-DD). */
   focalEnd: string
+  /** Max episodes to return after filtering (default 24). */
   topN?: number
+  /** Override default MIN_MATCH_STRENGTH (0–100). */
+  minMatchStrength?: number
 }
 
 function rmse(a: number[], b: number[]): number {
@@ -29,9 +48,14 @@ function rmse(a: number[], b: number[]): number {
   return Math.sqrt(sum / a.length)
 }
 
-function blendedDistance(tempRmse: number, precipRmse: number): number {
+function blendedDistance(
+  highRmse: number,
+  lowRmse: number,
+  precipRmse: number,
+): number {
   return (
-    TEMP_WEIGHT * (tempRmse / TEMP_SCALE_C) +
+    HIGH_WEIGHT * (highRmse / TEMP_SCALE_C) +
+    LOW_WEIGHT * (lowRmse / TEMP_SCALE_C) +
     PRECIP_WEIGHT * (precipRmse / PRECIP_SCALE_MM)
   )
 }
@@ -50,17 +74,28 @@ export function extractSeries(
   if (slice.length !== length) return null
 
   const dates: string[] = []
+  const tMax: number[] = []
+  const tMin: number[] = []
   const tMean: number[] = []
   const precip: number[] = []
 
   for (const d of slice) {
-    if (d.tMean == null || d.precip == null) return null
+    if (
+      d.tMax == null ||
+      d.tMin == null ||
+      d.tMean == null ||
+      d.precip == null
+    ) {
+      return null
+    }
     dates.push(d.date)
+    tMax.push(d.tMax)
+    tMin.push(d.tMin)
     tMean.push(d.tMean)
     precip.push(d.precip)
   }
 
-  return { dates, tMean, precip }
+  return { dates, tMax, tMin, tMean, precip }
 }
 
 function yearOf(isoDate: string): number {
@@ -78,16 +113,26 @@ function datesOverlap(
 
 /**
  * Full-year sliding-window search: for each calendar year, score every
- * L-length window on temp + precip vs the focal series; keep the best
- * episode per year; return top N by blended distance.
+ * L-length window on daily high + low + precip vs the focal series; keep
+ * the best episode per year that is similar enough; return newest first.
+ *
+ * Order answers “when did it last feel like this?” — not “which year is
+ * mathematically closest.” Highs and lows are matched separately so a heat
+ * wave is not confused with a mild week that only shares the same mean.
  */
 export function findAnalogEpisodes(
   history: DailyObservation[],
   focal: WeatherSeries,
   options: AnalogSearchOptions,
 ): AnalogEpisode[] {
-  const { length, focalStart, focalEnd, topN = 12 } = options
-  if (focal.tMean.length !== length || history.length < length) return []
+  const {
+    length,
+    focalStart,
+    focalEnd,
+    topN = 24,
+    minMatchStrength = MIN_MATCH_STRENGTH,
+  } = options
+  if (focal.tMax.length !== length || history.length < length) return []
 
   const byYear = new Map<number, DailyObservation[]>()
   for (const day of history) {
@@ -118,9 +163,10 @@ export function findAnalogEpisodes(
       // Exclude windows that overlap the focal episode (self-match).
       if (datesOverlap(startDate, endDate, focalStart, focalEnd)) continue
 
-      const tempRmse = rmse(focal.tMean, series.tMean)
+      const tempHighRmse = rmse(focal.tMax, series.tMax)
+      const tempLowRmse = rmse(focal.tMin, series.tMin)
       const precipRmse = rmse(focal.precip, series.precip)
-      const distance = blendedDistance(tempRmse, precipRmse)
+      const distance = blendedDistance(tempHighRmse, tempLowRmse, precipRmse)
 
       if (!best || distance < best.distance) {
         best = {
@@ -130,25 +176,56 @@ export function findAnalogEpisodes(
           series,
           distance,
           matchStrength: matchStrengthFromDistance(distance),
-          tempRmse,
+          tempHighRmse,
+          tempLowRmse,
           precipRmse,
         }
       }
     }
 
-    if (best) bestByYear.push(best)
+    if (best && best.matchStrength >= minMatchStrength) {
+      bestByYear.push(best)
+    }
   }
 
-  bestByYear.sort((a, b) => a.distance - b.distance)
+  // Most recent first — “when did it last feel like this?”
+  bestByYear.sort((a, b) =>
+    a.endDate < b.endDate ? 1 : a.endDate > b.endDate ? -1 : 0,
+  )
   return bestByYear.slice(0, topN)
 }
 
 export function seriesStats(series: WeatherSeries): {
-  avgTemp: number
+  avgHigh: number
+  avgLow: number
+  avgMean: number
   totalPrecip: number
 } {
-  const avgTemp =
-    series.tMean.reduce((s, v) => s + v, 0) / Math.max(series.tMean.length, 1)
+  const n = Math.max(series.tMax.length, 1)
+  const avgHigh = series.tMax.reduce((s, v) => s + v, 0) / n
+  const avgLow = series.tMin.reduce((s, v) => s + v, 0) / n
+  const avgMean = series.tMean.reduce((s, v) => s + v, 0) / n
   const totalPrecip = series.precip.reduce((s, v) => s + v, 0)
-  return { avgTemp, totalPrecip }
+  return { avgHigh, avgLow, avgMean, totalPrecip }
+}
+
+/**
+ * Signed deltas: analog − focal.
+ * Positive high/low = that spell was warmer; positive precip = wetter.
+ */
+export function seriesDeltas(
+  analog: WeatherSeries,
+  focal: WeatherSeries,
+): {
+  highDelta: number
+  lowDelta: number
+  precipDelta: number
+} {
+  const a = seriesStats(analog)
+  const f = seriesStats(focal)
+  return {
+    highDelta: a.avgHigh - f.avgHigh,
+    lowDelta: a.avgLow - f.avgLow,
+    precipDelta: a.totalPrecip - f.totalPrecip,
+  }
 }

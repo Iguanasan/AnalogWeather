@@ -117,9 +117,10 @@ export default function App() {
           length,
           focalStart: focal.start,
           focalEnd: focal.end,
-          topN: 12,
+          topN: 24,
         })
         setAnalogs(results)
+        // Newest similar spell first
         setSelected(results[0] ?? null)
       } finally {
         setComputing(false)
@@ -201,7 +202,7 @@ export default function App() {
 
           <div>
             <label className="field-label" htmlFor="anchor-date">
-              Anchor date
+              {length === 1 ? 'Selected Day' : 'Period Ending'}
             </label>
             <input
               id="anchor-date"
@@ -221,11 +222,50 @@ export default function App() {
             <span className="field-label">Share</span>
             <button
               type="button"
-              className="secondary-btn"
+              className={`icon-btn share-btn${copied ? ' copied' : ''}`}
               disabled={!place}
               onClick={copyShareLink}
+              aria-label={copied ? 'Link copied' : 'Share link'}
+              title={copied ? 'Link copied' : 'Copy share link'}
             >
-              {copied ? 'Copied!' : 'Copy link'}
+              {copied ? (
+                <svg
+                  className="icon"
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  aria-hidden="true"
+                >
+                  <path
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              ) : (
+                <svg
+                  className="icon"
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  aria-hidden="true"
+                >
+                  {/* Share-nodes: three dots connected as a graph */}
+                  <circle cx="18" cy="5" r="2.5" fill="currentColor" />
+                  <circle cx="6" cy="12" r="2.5" fill="currentColor" />
+                  <circle cx="18" cy="19" r="2.5" fill="currentColor" />
+                  <path
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    d="M8.4 10.8l7.2-4.6M8.4 13.2l7.2 4.6"
+                  />
+                </svg>
+              )}
             </button>
           </div>
         </div>
@@ -265,11 +305,21 @@ export default function App() {
                   {formatEpisodeRange(focal.start, focal.end)}
                 </span>
               </div>
+              <p className="muted section-help focal-help">
+                Matched on daily highs, overnight lows, and rain — so hot days
+                and nights that don&apos;t cool off compare like for like.
+              </p>
               <div className="stat-row">
                 <div className="stat">
-                  <span className="stat-label">Avg temp</span>
+                  <span className="stat-label">Avg high</span>
                   <span className="stat-value">
-                    {formatTemp(focalStats.avgTemp, units, 1)}
+                    {formatTemp(focalStats.avgHigh, units, 1)}
+                  </span>
+                </div>
+                <div className="stat">
+                  <span className="stat-label">Avg low</span>
+                  <span className="stat-value">
+                    {formatTemp(focalStats.avgLow, units, 1)}
                   </span>
                 </div>
                 <div className="stat">
@@ -279,7 +329,7 @@ export default function App() {
                   </span>
                 </div>
                 <div className="stat">
-                  <span className="stat-label">Closest matches</span>
+                  <span className="stat-label">Similar spells</span>
                   <span className="stat-value">{analogs.length}</span>
                 </div>
               </div>
@@ -289,15 +339,18 @@ export default function App() {
           {focal && !loadingHistory && (
             <section className="results-layout">
               <div className="panel">
-                <h2 className="section-title">Closest spells</h2>
+                <h2 className="section-title">When it felt like this</h2>
                 <p className="muted section-help">
-                  Best match per year anywhere in that year. Select a row to overlay charts.
+                  Most recent first · one spell per year · only if close enough
+                  (score ≥ 50). +/− is warmer/cooler or wetter/drier than this
+                  spell.
                 </p>
                 {computing ? (
                   <p className="muted">Searching the record…</p>
                 ) : (
                   <AnalogList
                     analogs={analogs}
+                    focal={focal.series}
                     selectedYear={selected?.year ?? null}
                     onSelect={setSelected}
                     units={units}
@@ -312,8 +365,8 @@ export default function App() {
                 </h2>
                 {selected && (
                   <p className="muted section-help">
-                    {formatEpisodeRange(selected.startDate, selected.endDate)} · match{' '}
-                    {selected.matchStrength.toFixed(1)}
+                    {formatEpisodeRange(selected.startDate, selected.endDate)} ·
+                    close {selected.matchStrength.toFixed(0)}
                   </p>
                 )}
                 <OverlayCharts
@@ -342,7 +395,7 @@ export default function App() {
           <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
             Open-Meteo
           </a>
-          . Temperature and precipitation only. No accounts.
+          . Highs, lows, and precipitation only. No accounts.
         </p>
       </footer>
     </div>

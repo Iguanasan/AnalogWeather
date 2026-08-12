@@ -38,12 +38,19 @@ function useNarrowViewport(maxWidth = 640): boolean {
 
 export function OverlayCharts({ focal, analog, units }: Props) {
   const narrow = useNarrowViewport()
-  const n = focal.tMean.length
+  const n = focal.tMax.length
+  const year = analog ? String(analog.year) : ''
   const tempData = Array.from({ length: n }, (_, i) => ({
     day: i + 1,
     label: narrow ? String(i + 1) : `Day ${i + 1}`,
-    focal: displayTemp(focal.tMean[i]!, units),
-    analog: analog ? displayTemp(analog.series.tMean[i]!, units) : undefined,
+    thisHigh: displayTemp(focal.tMax[i]!, units),
+    thisLow: displayTemp(focal.tMin[i]!, units),
+    analogHigh: analog
+      ? displayTemp(analog.series.tMax[i]!, units)
+      : undefined,
+    analogLow: analog
+      ? displayTemp(analog.series.tMin[i]!, units)
+      : undefined,
   }))
   const precipData = Array.from({ length: n }, (_, i) => ({
     day: i + 1,
@@ -52,7 +59,7 @@ export function OverlayCharts({ focal, analog, units }: Props) {
     analog: analog ? displayPrecip(analog.series.precip[i]!, units) : undefined,
   }))
 
-  const chartHeight = narrow ? 190 : 220
+  const chartHeight = narrow ? 210 : 240
   const tickFont = narrow ? 10 : 12
   const yAxisWidth = narrow ? 32 : 40
   const margin = narrow
@@ -60,11 +67,15 @@ export function OverlayCharts({ focal, analog, units }: Props) {
     : { top: 8, right: 12, left: 0, bottom: 0 }
   // Avoid cramming every day label on week/month windows
   const xInterval = n <= 7 ? 0 : n <= 14 ? 1 : Math.ceil(n / (narrow ? 5 : 7)) - 1
+  const showDots = n <= 7
 
   return (
     <div className="charts">
       <div className="chart-card">
-        <h3>Temperature ({tempUnitLabel(units)})</h3>
+        <h3>Highs &amp; lows ({tempUnitLabel(units)})</h3>
+        <p className="muted chart-subhelp">
+          Upper lines = daytime high · lower lines = overnight low
+        </p>
         <div className="chart-frame" style={{ height: chartHeight }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={tempData} margin={margin}>
@@ -89,29 +100,50 @@ export function OverlayCharts({ focal, analog, units }: Props) {
                 }}
               />
               <Legend
-                wrapperStyle={{ fontSize: narrow ? 12 : 14 }}
+                wrapperStyle={{ fontSize: narrow ? 11 : 13 }}
                 iconSize={narrow ? 10 : 14}
               />
               <Line
                 type="monotone"
-                dataKey="focal"
-                name="This spell"
+                dataKey="thisHigh"
+                name="This high"
                 stroke="var(--accent)"
                 strokeWidth={2.5}
-                dot={n <= 7 ? { r: 3 } : false}
+                dot={showDots ? { r: 3 } : false}
+                activeDot={{ r: 4 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="thisLow"
+                name="This low"
+                stroke="var(--accent)"
+                strokeWidth={2}
+                strokeDasharray="4 3"
+                dot={showDots ? { r: 2 } : false}
                 activeDot={{ r: 4 }}
               />
               {analog && (
-                <Line
-                  type="monotone"
-                  dataKey="analog"
-                  name={String(analog.year)}
-                  stroke="var(--accent-2)"
-                  strokeWidth={2}
-                  strokeDasharray="5 4"
-                  dot={n <= 7 ? { r: 3 } : false}
-                  activeDot={{ r: 4 }}
-                />
+                <>
+                  <Line
+                    type="monotone"
+                    dataKey="analogHigh"
+                    name={`${year} high`}
+                    stroke="var(--accent-2)"
+                    strokeWidth={2}
+                    dot={showDots ? { r: 3 } : false}
+                    activeDot={{ r: 4 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="analogLow"
+                    name={`${year} low`}
+                    stroke="var(--accent-2)"
+                    strokeWidth={1.75}
+                    strokeDasharray="4 3"
+                    dot={showDots ? { r: 2 } : false}
+                    activeDot={{ r: 4 }}
+                  />
+                </>
               )}
             </LineChart>
           </ResponsiveContainer>
