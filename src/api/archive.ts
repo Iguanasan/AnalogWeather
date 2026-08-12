@@ -70,11 +70,21 @@ export class WeatherArchiveError extends Error {
   }
 }
 
+export const OPEN_METEO_TERMS_URL = 'https://open-meteo.com/en/terms'
+
 export const RATE_LIMIT_TITLE = 'The weather archive needs a short break'
+
+/** Plain-language explanation aligned with Open-Meteo free-tier terms. */
 export const RATE_LIMIT_DETAIL =
-  'We use a free, shared open-data weather service (Open-Meteo). ' +
-  'To keep it available for everyone, it limits how many times anyone can ask for data. ' +
+  'This app uses Open-Meteo’s free open-access weather archive — a shared service ' +
+  'meant for private and non-profit sites and apps without subscriptions or advertising. ' +
+  'To keep that free service fair for everyone, Open-Meteo limits how often data can be requested ' +
+  '(about 600 times per minute, 5,000 per hour, and 10,000 per day on a network). ' +
   'We’ve hit that limit for now. Please wait a minute or two, then try again.'
+
+export const RATE_LIMIT_HINT =
+  'We only ask the archive once per place and remember the answer afterward. ' +
+  'Full terms: open-meteo.com/en/terms'
 
 function yesterdayUtc(): string {
   const d = new Date()

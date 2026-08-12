@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ARCHIVE_START,
+  OPEN_METEO_TERMS_URL,
   streamDailyHistory,
   toUserHistoryError,
 } from './api/archive'
 import { detectCurrentPlace, formatPlaceLabel } from './api/geocode'
+import { AboutDialog } from './components/AboutDialog'
 import { AnalogList } from './components/AnalogList'
 import { LoadingWeather } from './components/LoadingWeather'
 import { OverlayCharts } from './components/OverlayCharts'
@@ -73,6 +75,7 @@ export default function App() {
   const [analogSort, setAnalogSort] = useState<AnalogSort>('date')
   const [selected, setSelected] = useState<AnalogEpisode | null>(null)
   const [copied, setCopied] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const liveModeRef = useRef(liveMode)
@@ -341,53 +344,61 @@ export default function App() {
             Find past spells with temperature and rain like this day, week, or month.
           </p>
         </div>
-        <button
-          type="button"
-          className={`icon-btn share-btn${copied ? ' copied' : ''}`}
-          disabled={!place}
-          onClick={copyShareLink}
-          aria-label={copied ? 'Link copied' : 'Share link'}
-          title={copied ? 'Link copied' : 'Copy share link'}
-        >
-          {copied ? (
-            <svg
-              className="icon"
-              viewBox="0 0 24 24"
-              width="20"
-              height="20"
-              aria-hidden="true"
-            >
-              <path
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          ) : (
-            <svg
-              className="icon"
-              viewBox="0 0 24 24"
-              width="20"
-              height="20"
-              aria-hidden="true"
-            >
-              {/* Share-nodes: three dots connected as a graph */}
-              <circle cx="18" cy="5" r="2.5" fill="currentColor" />
-              <circle cx="6" cy="12" r="2.5" fill="currentColor" />
-              <circle cx="18" cy="19" r="2.5" fill="currentColor" />
-              <path
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                d="M8.4 10.8l7.2-4.6M8.4 13.2l7.2 4.6"
-              />
-            </svg>
-          )}
-        </button>
+        <div className="hero-actions">
+          <button
+            type="button"
+            className="secondary-btn about-btn"
+            onClick={() => setAboutOpen(true)}
+          >
+            About
+          </button>
+          <button
+            type="button"
+            className={`icon-btn share-btn${copied ? ' copied' : ''}`}
+            disabled={!place}
+            onClick={copyShareLink}
+            aria-label={copied ? 'Link copied' : 'Share link'}
+            title={copied ? 'Link copied' : 'Copy share link'}
+          >
+            {copied ? (
+              <svg
+                className="icon"
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                aria-hidden="true"
+              >
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="icon"
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                aria-hidden="true"
+              >
+                <circle cx="18" cy="5" r="2.5" fill="currentColor" />
+                <circle cx="6" cy="12" r="2.5" fill="currentColor" />
+                <circle cx="18" cy="19" r="2.5" fill="currentColor" />
+                <path
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  d="M8.4 10.8l7.2-4.6M8.4 13.2l7.2 4.6"
+                />
+              </svg>
+            )}
+          </button>
+        </div>
       </header>
 
       <section className="controls panel">
@@ -556,10 +567,23 @@ export default function App() {
               <h2 className="history-error-title">{historyError.title}</h2>
               <p className="history-error-detail">{historyError.detail}</p>
               {historyError.kind === 'rate_limit' && (
-                <p className="muted history-error-hint">
-                  Tip: waiting a couple of minutes usually works. We only ask the
-                  free archive once per place and remember the result afterward.
-                </p>
+                <>
+                  <p className="muted history-error-hint">
+                    Tip: waiting a couple of minutes usually works. We only ask
+                    the free archive once per place and remember the result
+                    afterward.
+                  </p>
+                  <p className="muted history-error-terms">
+                    Open-Meteo free-tier terms (fair-use limits):{' '}
+                    <a
+                      href={OPEN_METEO_TERMS_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      open-meteo.com/en/terms
+                    </a>
+                  </p>
+                </>
               )}
               <button
                 type="button"
@@ -731,18 +755,7 @@ export default function App() {
         </>
       )}
 
-      <section className="panel credit-panel" aria-label="Credits">
-        <img
-          className="credit-logo"
-          src="/iaidi-logo-sm.png"
-          alt="Iguanasan's AI Dojo Inc."
-          width={160}
-          height={160}
-        />
-        <p className="credit-text">
-          Developed by Iguanasan&apos;s AI Dojo Inc.
-        </p>
-      </section>
+      <AboutDialog open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </div>
   )
 }
