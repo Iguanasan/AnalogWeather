@@ -11,7 +11,7 @@ type ArchiveResponse = {
 }
 
 export const ARCHIVE_START_YEAR = 1940
-const ARCHIVE_START = `${ARCHIVE_START_YEAR}-01-01`
+export const ARCHIVE_START = `${ARCHIVE_START_YEAR}-01-01`
 
 /** Recent years first for a fast first paint; older decades stream in later. */
 const FIRST_CHUNK_YEARS = 5

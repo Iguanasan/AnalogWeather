@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { streamDailyHistory } from './api/archive'
+import { ARCHIVE_START, streamDailyHistory } from './api/archive'
 import { detectCurrentPlace, formatPlaceLabel } from './api/geocode'
 import { AnalogList } from './components/AnalogList'
 import { LoadingWeather } from './components/LoadingWeather'
@@ -273,7 +273,7 @@ export default function App() {
     <div className="app">
       <header className="hero">
         <div className="brand">
-          <h1>Analog Weather</h1>
+          <h1>When did it feel like?</h1>
           <p className="tagline">
             Find past spells with temperature and rain like this day, week, or month.
           </p>
@@ -488,18 +488,30 @@ export default function App() {
           )}
 
           <section className="panel status-bar">
-            <div>
+            <div className="status-place">
               <strong>{formatPlaceLabel(place)}</strong>
               {archiveEnd && (
-                <span className="muted">
+                <span className="muted status-archive">
                   {' '}
-                  · archive through {formatNiceDate(archiveEnd)}
+                  - (
+                  {formatNiceDate(days?.[0]?.date ?? ARCHIVE_START)}
+                  {' to '}
+                  {formatNiceDate(archiveEnd)}
+                  ) - All available data from{' '}
+                  <a
+                    href="https://open-meteo.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open-Meteo
+                  </a>
+                  .
                 </span>
               )}
               {streaming && (
                 <span className="muted">
                   {' '}
-                  · still filling older years…
+                  Still filling older years…
                 </span>
               )}
             </div>

@@ -1,18 +1,28 @@
+/* Brand: Industrial Zen — brand-design.md */
 :root {
   color-scheme: light dark;
-  --bg: #0f1419;
-  --panel: #1a222c;
-  --panel-2: #222c38;
-  --text: #e8eef4;
-  --muted: #93a1b0;
-  --border: #2e3a48;
-  --grid: #2a3542;
-  --accent: #3db8a8;
-  --accent-2: #e8a54b;
-  --accent-soft: rgba(61, 184, 168, 0.15);
-  --danger: #f07178;
-  --radius: 12px;
-  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* Palette */
+  --brand-purple: #82538d;
+  --brand-green: #67934c;
+  --brand-deep: #3b3943;
+  --brand-light: #eae4d8;
+  --brand-white: #ffffff;
+
+  /* Dark theme (default) */
+  --bg: #2e2c34;
+  --panel: #3b3943;
+  --panel-2: #48464f;
+  --text: #ffffff;
+  --muted: #c4bdb0;
+  --border: #5a5762;
+  --grid: #5a5762;
+  --accent: #82538d;
+  --accent-2: #67934c;
+  --accent-soft: rgba(130, 83, 141, 0.22);
+  --danger: #c45c5c;
+  --radius: 10px;
+  --font: "Roboto Flex", system-ui, -apple-system, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, monospace;
   font-family: var(--font);
   line-height: 1.5;
   font-weight: 400;
@@ -25,17 +35,17 @@
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #f4f7fa;
+    --bg: #eae4d8;
     --panel: #ffffff;
-    --panel-2: #eef3f7;
-    --text: #15202b;
-    --muted: #5c6b7a;
-    --border: #d5dee7;
-    --grid: #e2e8ef;
-    --accent: #0d8f80;
-    --accent-2: #c47b12;
-    --accent-soft: rgba(13, 143, 128, 0.12);
-    --danger: #c23b42;
+    --panel-2: #f3efe6;
+    --text: #3b3943;
+    --muted: #6b6774;
+    --border: #cfc8bb;
+    --grid: #ddd6c9;
+    --accent: #82538d;
+    --accent-2: #67934c;
+    --accent-soft: rgba(130, 83, 141, 0.14);
+    --danger: #a33d3d;
   }
 }
 
@@ -54,10 +64,7 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   overflow-x: hidden;
-  background:
-    radial-gradient(1200px 500px at 10% -10%, rgba(61, 184, 168, 0.12), transparent),
-    radial-gradient(900px 400px at 90% 0%, rgba(232, 165, 75, 0.08), transparent),
-    var(--bg);
+  background: var(--bg);
 }
 
 #root {
@@ -73,6 +80,15 @@ a {
 button,
 input {
   font: inherit;
+}
+
+/* Technical figures use mono for a precise industrial feel */
+.stat-value,
+.score-value,
+.analog-rank,
+input[type='date'],
+.loading-banner-detail {
+  font-family: var(--font-mono);
 }
 
 .app {
@@ -99,9 +115,11 @@ input {
 
 .brand h1 {
   margin: 0 0 0.35rem;
-  font-size: clamp(1.5rem, 5.5vw, 2.25rem);
+  font-size: clamp(1.45rem, 5.2vw, 2.1rem);
+  font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.15;
+  color: var(--text);
 }
 
 .tagline {
@@ -110,6 +128,22 @@ input {
   max-width: 40rem;
   font-size: clamp(0.92rem, 2.8vw, 1rem);
   line-height: 1.45;
+  font-weight: 400;
+}
+
+.status-place {
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.status-archive {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+}
+
+.status-archive a {
+  font-family: var(--font);
+  font-weight: 600;
 }
 
 .hero .share-btn {
@@ -123,7 +157,7 @@ input {
   border-radius: var(--radius);
   padding: 1rem 1.1rem;
   margin-bottom: 1rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
 }
 
 .field-label {
@@ -234,7 +268,7 @@ input[type='date']:focus {
   border-radius: 10px;
   max-height: 260px;
   overflow: auto;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
 }
 
 .place-results button {
@@ -282,7 +316,7 @@ input[type='date']:focus {
 .segmented button.active {
   background: var(--panel);
   color: var(--text);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .secondary-btn {
@@ -569,7 +603,7 @@ input[type='date']:focus {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: none;
 }
 
 .loading-weather-banner .loading-svg {
@@ -648,9 +682,9 @@ input[type='date']:focus {
   text-align: center;
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 1.35rem 1.25rem 1.5rem;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
+  box-shadow: none;
 }
 
 .loading-scene {
