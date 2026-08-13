@@ -97,6 +97,7 @@ export function OverlayCharts({ focal, analog, units }: Props) {
                   border: '1px solid var(--border)',
                   borderRadius: 8,
                   fontSize: narrow ? 12 : 14,
+                  color: 'var(--text)',
                 }}
               />
               <Legend
@@ -172,6 +173,7 @@ export function OverlayCharts({ focal, analog, units }: Props) {
                   border: '1px solid var(--border)',
                   borderRadius: 8,
                   fontSize: narrow ? 12 : 14,
+                  color: 'var(--text)',
                 }}
               />
               <Legend

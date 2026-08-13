@@ -11,12 +11,14 @@ import { AnalogList } from './components/AnalogList'
 import { LoadingWeather } from './components/LoadingWeather'
 import { OverlayCharts } from './components/OverlayCharts'
 import { PlaceSearch } from './components/PlaceSearch'
+import { ThemeToggle } from './components/ThemeToggle'
 import {
   findAnalogEpisodes,
   findAnalogEpisodesInSlice,
   mergeAnalogEpisodes,
   seriesStats,
 } from './domain/analogSearch'
+import { classifyAtmosphere, getAtmosphereMeta } from './domain/atmosphere'
 import type {
   AnalogEpisode,
   AppQuery,
@@ -244,6 +246,15 @@ export default function App() {
     return buildFocalFromHistory(days, effectiveAnchor, length)
   }, [days, effectiveAnchor, length])
 
+  const atmosphere = useMemo(() => {
+    if (!focal) return 'fair'
+    return classifyAtmosphere(focal.series)
+  }, [focal])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-atmosphere', atmosphere)
+  }, [atmosphere])
+
   // Full re-scan only when the user changes window or anchor — not when
   // progressive chunks arrive (those merge in the stream loop above).
   useEffect(() => {
@@ -352,6 +363,7 @@ export default function App() {
           >
             About
           </button>
+          <ThemeToggle />
           <button
             type="button"
             className={`icon-btn share-btn${copied ? ' copied' : ''}`}
@@ -631,7 +643,19 @@ export default function App() {
           {focal && focalStats && (
             <section className="panel focal-panel">
               <div className="focal-header">
-                <h2>{windowLabel(length)}</h2>
+                <div className="focal-title-row">
+                  <h2>{windowLabel(length)}</h2>
+                  <span
+                    className="atmosphere-badge"
+                    data-atmosphere-type={atmosphere}
+                    title={`Atmosphere mood: ${getAtmosphereMeta(atmosphere).label}`}
+                  >
+                    <span className="atmosphere-icon" aria-hidden="true">
+                      {getAtmosphereMeta(atmosphere).icon}
+                    </span>
+                    <span>{getAtmosphereMeta(atmosphere).label}</span>
+                  </span>
+                </div>
                 <span className="muted">
                   {formatEpisodeRange(focal.start, focal.end)}
                 </span>

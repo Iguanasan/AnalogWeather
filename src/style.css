@@ -1,8 +1,8 @@
 /* Brand: Industrial Zen — brand-design.md
-   Dark mode (forced): deep neutral field, brand light text, purple / green accents.
-   Light tokens kept commented for easy restore later. */
+   Light by default; [data-theme="dark"] swaps the field. Boot script in
+   index.html sets data-theme before paint so the first frame matches. */
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   /* Palette */
   --brand-purple: #82538d;
   --brand-green: #67934c;
@@ -10,18 +10,19 @@
   --brand-light: #eae4d8;
   --brand-white: #ffffff;
 
-  /* Dark theme */
-  --bg: #1c1b20;
-  --panel: #3b3943;
-  --panel-2: #2a2830;
-  --text: #eae4d8;
-  --muted: #a39e93;
-  --border: #5c5866;
-  --grid: #4a4654;
+  /* Light theme */
+  --bg: #eae4d8;
+  --panel: #ffffff;
+  --panel-2: #f3efe6;
+  --text: #3b3943;
+  --muted: #6b6774;
+  --border: #cfc8bb;
+  --grid: #ddd6c9;
   --accent: #82538d;
   --accent-2: #67934c;
-  --accent-soft: rgba(130, 83, 141, 0.28);
-  --danger: #e07a7a;
+  --accent-soft: rgba(130, 83, 141, 0.14);
+  --danger: #a33d3d;
+  --overlay: rgba(59, 57, 67, 0.45);
   --radius: 10px;
   /* Brand guide: Roboto / Roboto Flex for all UI text */
   --font: "Roboto Flex", "Roboto", system-ui, -apple-system, sans-serif;
@@ -35,23 +36,21 @@
   -webkit-font-smoothing: antialiased;
 }
 
-/* Light mode (disabled while previewing dark):
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: #eae4d8;
-    --panel: #ffffff;
-    --panel-2: #f3efe6;
-    --text: #3b3943;
-    --muted: #6b6774;
-    --border: #cfc8bb;
-    --grid: #ddd6c9;
-    --accent: #82538d;
-    --accent-2: #67934c;
-    --accent-soft: rgba(130, 83, 141, 0.14);
-    --danger: #a33d3d;
-  }
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #1c1b20;
+  --panel: #3b3943;
+  --panel-2: #2a2830;
+  --text: #eae4d8;
+  --muted: #a39e93;
+  --border: #5c5866;
+  --grid: #4a4654;
+  --accent: #82538d;
+  --accent-2: #67934c;
+  --accent-soft: rgba(130, 83, 141, 0.28);
+  --danger: #e07a7a;
+  --overlay: rgba(28, 27, 32, 0.72);
 }
-*/
 
 * {
   box-sizing: border-box;
@@ -69,6 +68,168 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
   background: var(--bg);
+  color: var(--text);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  body {
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+/* —— Atmosphere Responsive Visual Backgrounds —— */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  transition: opacity 0.5s ease, background 0.5s ease;
+  opacity: 0.85;
+}
+
+/* Rain atmosphere: Cool slate gradient with falling rain streak pattern */
+[data-atmosphere='rain'] body::before {
+  background:
+    repeating-linear-gradient(
+      105deg,
+      rgba(100, 140, 180, 0.07) 0px,
+      rgba(100, 140, 180, 0.07) 1.5px,
+      transparent 1.5px,
+      transparent 16px
+    ),
+    radial-gradient(circle at 50% 0%, rgba(90, 125, 155, 0.18), transparent 70%);
+}
+
+[data-theme='dark'][data-atmosphere='rain'] body::before {
+  background:
+    repeating-linear-gradient(
+      105deg,
+      rgba(120, 170, 220, 0.09) 0px,
+      rgba(120, 170, 220, 0.09) 1.5px,
+      transparent 1.5px,
+      transparent 16px
+    ),
+    radial-gradient(circle at 50% 0%, rgba(55, 80, 105, 0.35), transparent 70%);
+}
+
+/* Storm atmosphere: Heavy dark slate indigo gradient with dense rain */
+[data-atmosphere='storm'] body::before {
+  background:
+    repeating-linear-gradient(
+      112deg,
+      rgba(70, 90, 130, 0.12) 0px,
+      rgba(70, 90, 130, 0.12) 2px,
+      transparent 2px,
+      transparent 14px
+    ),
+    radial-gradient(circle at 40% -10%, rgba(100, 80, 140, 0.22), transparent 75%);
+}
+
+[data-theme='dark'][data-atmosphere='storm'] body::before {
+  background:
+    repeating-linear-gradient(
+      112deg,
+      rgba(130, 150, 200, 0.1) 0px,
+      rgba(130, 150, 200, 0.1) 2px,
+      transparent 2px,
+      transparent 14px
+    ),
+    radial-gradient(circle at 40% -10%, rgba(70, 50, 100, 0.45), transparent 75%);
+}
+
+/* Snow atmosphere: Frosted pale cyan gradient with soft glistening dots */
+[data-atmosphere='snow'] body::before {
+  background:
+    radial-gradient(
+      circle at 20% 30%,
+      rgba(180, 220, 240, 0.25) 1px,
+      transparent 3px
+    ),
+    radial-gradient(
+      circle at 75% 15%,
+      rgba(180, 220, 240, 0.3) 1.5px,
+      transparent 3.5px
+    ),
+    radial-gradient(
+      circle at 60% 65%,
+      rgba(180, 220, 240, 0.2) 1px,
+      transparent 2.5px
+    ),
+    radial-gradient(circle at 50% 0%, rgba(160, 210, 235, 0.22), transparent 70%);
+}
+
+[data-theme='dark'][data-atmosphere='snow'] body::before {
+  background:
+    radial-gradient(
+      circle at 20% 30%,
+      rgba(200, 235, 255, 0.2) 1px,
+      transparent 3px
+    ),
+    radial-gradient(
+      circle at 75% 15%,
+      rgba(200, 235, 255, 0.25) 1.5px,
+      transparent 3.5px
+    ),
+    radial-gradient(
+      circle at 60% 65%,
+      rgba(200, 235, 255, 0.18) 1px,
+      transparent 2.5px
+    ),
+    radial-gradient(circle at 50% 0%, rgba(45, 80, 110, 0.38), transparent 70%);
+}
+
+/* Heat atmosphere: Warm sunbaked golden-amber top-right radial glow */
+[data-atmosphere='heat'] body::before {
+  background: radial-gradient(
+    circle at 85% -10%,
+    rgba(225, 145, 50, 0.22),
+    rgba(225, 145, 50, 0.05) 50%,
+    transparent 75%
+  );
+}
+
+[data-theme='dark'][data-atmosphere='heat'] body::before {
+  background: radial-gradient(
+    circle at 85% -10%,
+    rgba(215, 125, 40, 0.32),
+    rgba(180, 95, 30, 0.1) 50%,
+    transparent 75%
+  );
+}
+
+/* Cold atmosphere: Crisp arctic frost-blue top glow */
+[data-atmosphere='cold'] body::before {
+  background: radial-gradient(
+    circle at 50% -10%,
+    rgba(100, 175, 215, 0.2),
+    transparent 65%
+  );
+}
+
+[data-theme='dark'][data-atmosphere='cold'] body::before {
+  background: radial-gradient(
+    circle at 50% -10%,
+    rgba(50, 115, 155, 0.35),
+    transparent 65%
+  );
+}
+
+/* Fair atmosphere: Subtle ambient soft sky tint */
+[data-atmosphere='fair'] body::before {
+  background: radial-gradient(
+    circle at 50% 0%,
+    rgba(130, 83, 141, 0.08),
+    transparent 60%
+  );
+}
+
+[data-theme='dark'][data-atmosphere='fair'] body::before {
+  background: radial-gradient(
+    circle at 50% 0%,
+    rgba(130, 83, 141, 0.15),
+    transparent 60%
+  );
 }
 
 #root {
@@ -434,9 +595,17 @@ input[type='date']:focus {
 .focal-header {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
   margin-bottom: 0.75rem;
+}
+
+.focal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
 }
 
 .focal-header h2,
@@ -444,6 +613,56 @@ input[type='date']:focus {
   margin: 0;
   font-size: 1.15rem;
   font-weight: 600;
+}
+
+.atmosphere-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.3;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+
+.atmosphere-badge .atmosphere-icon {
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.atmosphere-badge[data-atmosphere-type='rain'] {
+  border-color: rgba(90, 140, 190, 0.4);
+  background: rgba(90, 140, 190, 0.14);
+}
+
+.atmosphere-badge[data-atmosphere-type='storm'] {
+  border-color: rgba(130, 90, 170, 0.4);
+  background: rgba(130, 90, 170, 0.16);
+}
+
+.atmosphere-badge[data-atmosphere-type='snow'] {
+  border-color: rgba(100, 180, 220, 0.4);
+  background: rgba(100, 180, 220, 0.16);
+}
+
+.atmosphere-badge[data-atmosphere-type='heat'] {
+  border-color: rgba(220, 140, 40, 0.4);
+  background: rgba(220, 140, 40, 0.16);
+}
+
+.atmosphere-badge[data-atmosphere-type='cold'] {
+  border-color: rgba(80, 160, 200, 0.4);
+  background: rgba(80, 160, 200, 0.14);
+}
+
+.atmosphere-badge[data-atmosphere-type='fair'] {
+  border-color: rgba(103, 147, 76, 0.4);
+  background: rgba(103, 147, 76, 0.14);
 }
 
 .panel-heading {
@@ -663,7 +882,7 @@ input[type='date']:focus {
   padding: 1.25rem;
   padding-left: max(1.25rem, env(safe-area-inset-left));
   padding-right: max(1.25rem, env(safe-area-inset-right));
-  background: rgba(28, 27, 32, 0.72);
+  background: var(--overlay);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   animation: loading-fade-in 0.2s ease-out;
@@ -832,7 +1051,7 @@ input[type='date']:focus {
   padding: 1.25rem;
   padding-left: max(1.25rem, env(safe-area-inset-left));
   padding-right: max(1.25rem, env(safe-area-inset-right));
-  background: rgba(28, 27, 32, 0.72);
+  background: var(--overlay);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   animation: loading-fade-in 0.28s ease-out;
@@ -1064,6 +1283,10 @@ input[type='date']:focus {
 }
 
 .icon-btn .icon {
+  display: block;
+}
+
+.theme-toggle .theme-yin-yang {
   display: block;
 }
 

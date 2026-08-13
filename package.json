@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
-    "test": "npx tsx src/domain/analogSearch.test.ts"
+    "test": "npx tsx src/domain/analogSearch.test.ts && npx tsx src/lib/theme.test.ts && npx tsx src/domain/atmosphere.test.ts"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.51.3",
