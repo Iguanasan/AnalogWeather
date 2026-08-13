@@ -12,6 +12,7 @@ import { LoadingWeather } from './components/LoadingWeather'
 import { OverlayCharts } from './components/OverlayCharts'
 import { PlaceSearch } from './components/PlaceSearch'
 import { ThemeToggle } from './components/ThemeToggle'
+import { WeatherBackground } from './components/WeatherBackground'
 import {
   findAnalogEpisodes,
   findAnalogEpisodesInSlice,
@@ -348,6 +349,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <WeatherBackground atmosphere={atmosphere} />
       <header className="hero">
         <div className="brand">
           <h1>When did it feel like?</h1>

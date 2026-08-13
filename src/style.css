@@ -78,6 +78,146 @@ body {
 }
 
 /* —— Atmosphere Responsive Visual Backgrounds —— */
+.weather-bg-container {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+  transition: opacity 0.6s ease;
+
+  /* Default / Light theme SVG variables */
+  --snow-hill-top: #e8f1f8;
+  --snow-hill-bot: #cbe0ef;
+  --tree-color: #557060;
+  --flake-color: #ffffff;
+  --rain-cloud-fill: #788e9f;
+  --rain-hill-fill: #92a7b8;
+  --rain-line-color: rgba(80, 130, 185, 0.65);
+
+  --storm-cloud-fill: #3f4a5a;
+  --storm-hill-fill: #546274;
+  --storm-line-color: rgba(60, 105, 165, 0.75);
+
+  --sun-glow-core: #ff9800;
+  --sun-glow-outer: #ffca28;
+  --sun-disk-color: #ffa000;
+  --heat-dune-fill: #d89a56;
+
+  --cold-mountain-fill: #86a0b8;
+  --cold-mountain-fill-front: #6e8aa4;
+
+  --fair-hill-fill: #88af78;
+  --fair-cloud-color: #ffffff;
+}
+
+[data-theme='dark'] .weather-bg-container {
+  --snow-hill-top: #1e2b38;
+  --snow-hill-bot: #121c26;
+  --tree-color: #19271e;
+  --flake-color: rgba(215, 238, 255, 0.85);
+  --rain-cloud-fill: #18222c;
+  --rain-hill-fill: #101720;
+  --rain-line-color: rgba(135, 185, 235, 0.55);
+
+  --storm-cloud-fill: #121720;
+  --storm-hill-fill: #0b0f16;
+  --storm-line-color: rgba(155, 200, 255, 0.65);
+
+  --sun-glow-core: #e65100;
+  --sun-glow-outer: #f57c00;
+  --sun-disk-color: #ff6d00;
+  --heat-dune-fill: #553012;
+
+  --cold-mountain-fill: #182635;
+  --cold-mountain-fill-front: #101c28;
+
+  --fair-hill-fill: #22331c;
+  --fair-cloud-color: rgba(255, 255, 255, 0.12);
+}
+
+.weather-bg-svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Animations for weather particles */
+@keyframes snowfall {
+  0% {
+    transform: translateY(-20px) translateX(0);
+  }
+  50% {
+    transform: translateY(450px) translateX(15px);
+  }
+  100% {
+    transform: translateY(920px) translateX(-10px);
+  }
+}
+
+.snowflake {
+  animation: snowfall 8s linear infinite;
+}
+
+.sf-delay-0 { animation-delay: 0s; animation-duration: 7s; }
+.sf-delay-1 { animation-delay: 1.2s; animation-duration: 9s; }
+.sf-delay-2 { animation-delay: 2.5s; animation-duration: 6.5s; }
+.sf-delay-3 { animation-delay: 3.8s; animation-duration: 8.5s; }
+.sf-delay-4 { animation-delay: 0.7s; animation-duration: 10s; }
+.sf-delay-5 { animation-delay: 4.5s; animation-duration: 7.5s; }
+.sf-delay-6 { animation-delay: 2.1s; animation-duration: 8s; }
+.sf-delay-7 { animation-delay: 5.3s; animation-duration: 9.5s; }
+
+@keyframes rainfall {
+  0% {
+    transform: translateY(-40px) translateX(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.8;
+  }
+  85% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(950px) translateX(-120px);
+    opacity: 0;
+  }
+}
+
+.raindrop {
+  animation: rainfall 1.4s linear infinite;
+}
+
+.rd-delay-0 { animation-delay: 0s; }
+.rd-delay-1 { animation-delay: 0.25s; }
+.rd-delay-2 { animation-delay: 0.5s; }
+.rd-delay-3 { animation-delay: 0.75s; }
+.rd-delay-4 { animation-delay: 1s; }
+.rd-delay-5 { animation-delay: 1.15s; }
+.rd-delay-6 { animation-delay: 0.4s; }
+
+@keyframes cloud-drift {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(35px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.cloud-1 {
+  animation: cloud-drift 24s ease-in-out infinite;
+}
+
+.cloud-2 {
+  animation: cloud-drift 32s ease-in-out infinite reverse;
+}
+
 body::before {
   content: '';
   position: fixed;
@@ -85,7 +225,7 @@ body::before {
   pointer-events: none;
   z-index: -1;
   transition: opacity 0.5s ease, background 0.5s ease;
-  opacity: 0.85;
+  opacity: 0.5;
 }
 
 /* Rain atmosphere: Cool slate gradient with falling rain streak pattern */
