@@ -218,18 +218,17 @@ body {
   animation: cloud-drift 32s ease-in-out infinite reverse;
 }
 
-body::before {
+.weather-bg-container::before {
   content: '';
-  position: fixed;
+  position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: -1;
   transition: opacity 0.5s ease, background 0.5s ease;
   opacity: 0.5;
 }
 
 /* Rain atmosphere: Cool slate gradient with falling rain streak pattern */
-[data-atmosphere='rain'] body::before {
+[data-atmosphere='rain'] .weather-bg-container::before {
   background:
     repeating-linear-gradient(
       105deg,
@@ -241,7 +240,7 @@ body::before {
     radial-gradient(circle at 50% 0%, rgba(90, 125, 155, 0.18), transparent 70%);
 }
 
-[data-theme='dark'][data-atmosphere='rain'] body::before {
+[data-theme='dark'][data-atmosphere='rain'] .weather-bg-container::before {
   background:
     repeating-linear-gradient(
       105deg,
@@ -254,7 +253,7 @@ body::before {
 }
 
 /* Storm atmosphere: Heavy dark slate indigo gradient with dense rain */
-[data-atmosphere='storm'] body::before {
+[data-atmosphere='storm'] .weather-bg-container::before {
   background:
     repeating-linear-gradient(
       112deg,
@@ -266,7 +265,7 @@ body::before {
     radial-gradient(circle at 40% -10%, rgba(100, 80, 140, 0.22), transparent 75%);
 }
 
-[data-theme='dark'][data-atmosphere='storm'] body::before {
+[data-theme='dark'][data-atmosphere='storm'] .weather-bg-container::before {
   background:
     repeating-linear-gradient(
       112deg,
@@ -279,7 +278,7 @@ body::before {
 }
 
 /* Snow atmosphere: Frosted pale cyan gradient with soft glistening dots */
-[data-atmosphere='snow'] body::before {
+[data-atmosphere='snow'] .weather-bg-container::before {
   background:
     radial-gradient(
       circle at 20% 30%,
@@ -299,7 +298,7 @@ body::before {
     radial-gradient(circle at 50% 0%, rgba(160, 210, 235, 0.22), transparent 70%);
 }
 
-[data-theme='dark'][data-atmosphere='snow'] body::before {
+[data-theme='dark'][data-atmosphere='snow'] .weather-bg-container::before {
   background:
     radial-gradient(
       circle at 20% 30%,
@@ -320,7 +319,7 @@ body::before {
 }
 
 /* Heat atmosphere: Warm sunbaked golden-amber top-right radial glow */
-[data-atmosphere='heat'] body::before {
+[data-atmosphere='heat'] .weather-bg-container::before {
   background: radial-gradient(
     circle at 85% -10%,
     rgba(225, 145, 50, 0.22),
@@ -329,7 +328,7 @@ body::before {
   );
 }
 
-[data-theme='dark'][data-atmosphere='heat'] body::before {
+[data-theme='dark'][data-atmosphere='heat'] .weather-bg-container::before {
   background: radial-gradient(
     circle at 85% -10%,
     rgba(215, 125, 40, 0.32),
@@ -339,7 +338,7 @@ body::before {
 }
 
 /* Cold atmosphere: Crisp arctic frost-blue top glow */
-[data-atmosphere='cold'] body::before {
+[data-atmosphere='cold'] .weather-bg-container::before {
   background: radial-gradient(
     circle at 50% -10%,
     rgba(100, 175, 215, 0.2),
@@ -347,7 +346,7 @@ body::before {
   );
 }
 
-[data-theme='dark'][data-atmosphere='cold'] body::before {
+[data-theme='dark'][data-atmosphere='cold'] .weather-bg-container::before {
   background: radial-gradient(
     circle at 50% -10%,
     rgba(50, 115, 155, 0.35),
@@ -356,7 +355,7 @@ body::before {
 }
 
 /* Fair atmosphere: Subtle ambient soft sky tint */
-[data-atmosphere='fair'] body::before {
+[data-atmosphere='fair'] .weather-bg-container::before {
   background: radial-gradient(
     circle at 50% 0%,
     rgba(130, 83, 141, 0.08),
@@ -364,7 +363,7 @@ body::before {
   );
 }
 
-[data-theme='dark'][data-atmosphere='fair'] body::before {
+[data-theme='dark'][data-atmosphere='fair'] .weather-bg-container::before {
   background: radial-gradient(
     circle at 50% 0%,
     rgba(130, 83, 141, 0.15),
@@ -413,6 +412,9 @@ h3,
 }
 
 .app {
+  /* Stacking context so weather-bg z-index: -1 sits behind panels, not
+     behind the opaque html/body background. */
+  isolation: isolate;
   max-width: 1100px;
   margin: 0 auto;
   padding: 1.5rem 1.25rem 3rem;
